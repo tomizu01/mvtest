@@ -169,6 +169,7 @@
         <!-- ナビゲーションバー -->
         <div id="nav-bar">
             <button class="nav-bar-button" onclick="toggleViewMode()">シームレス表示</button>
+            <button id="autoplay-button" class="nav-bar-button" onclick="toggleAutoplay()" style="display: none;">自動再生</button>
             <button class="nav-bar-button" onclick="toggleFullscreen()">全画面</button>
         </div>
     </div>
@@ -321,8 +322,14 @@
         // 表示モードの管理
         let viewMode = 'normal'; // 'normal' or 'seamless'
         let seamlessPages = [];
-        const MAX_PAGES = 100;
+        const MAX_PAGES = 209; // テスト用画像の最大ページ数
         const SEAMLESS_PRELOAD_RANGE = 5; // 現在位置から前後5ページを読み込む
+
+        // 自動再生の管理
+        let autoplayEnabled = false;
+        let autoplayInterval = null;
+        const AUTOPLAY_SPEED = 4; // 1フレームあたりのスクロール量（ピクセル）
+        const AUTOPLAY_FPS = 30; // フレームレート
 
         // モード切り替え
         function toggleViewMode() {
@@ -333,6 +340,9 @@
                 document.getElementById('normal-mode-content').style.display = 'none';
                 document.querySelector('.nav-bar-button').textContent = '見開き表示';
 
+                // 自動再生ボタンを表示
+                document.getElementById('autoplay-button').style.display = 'block';
+
                 // シームレスモードを初期化
                 initSeamlessMode();
             } else {
@@ -341,6 +351,12 @@
                 document.getElementById('seamless-container').classList.remove('active');
                 document.getElementById('normal-mode-content').style.display = 'block';
                 document.querySelector('.nav-bar-button').textContent = 'シームレス表示';
+
+                // 自動再生を停止して非表示
+                if (autoplayEnabled) {
+                    toggleAutoplay();
+                }
+                document.getElementById('autoplay-button').style.display = 'none';
 
                 // 通常モードを再描画
                 if (Module.ccall) {
@@ -380,6 +396,7 @@
         let isDragging = false;
         let startX = 0;
         let scrollLeft = 0;
+        let autoplayPausedByDrag = false;
 
         function setupDragScroll(container) {
             container.addEventListener('mousedown', (e) => {
@@ -388,6 +405,15 @@
                 scrollLeft = container.scrollLeft;
                 container.style.cursor = 'grabbing';
                 container.style.userSelect = 'none';
+
+                // 自動再生中の場合は一時停止
+                if (autoplayEnabled) {
+                    autoplayPausedByDrag = true;
+                    if (autoplayInterval) {
+                        clearInterval(autoplayInterval);
+                        autoplayInterval = null;
+                    }
+                }
             });
 
             container.addEventListener('mouseleave', () => {
@@ -398,6 +424,27 @@
             container.addEventListener('mouseup', () => {
                 isDragging = false;
                 container.style.cursor = 'grab';
+
+                // ドラッグで一時停止していた場合は再開
+                if (autoplayPausedByDrag && autoplayEnabled) {
+                    autoplayPausedByDrag = false;
+                    let frameCount = 0;
+                    autoplayInterval = setInterval(() => {
+                        if (container.scrollLeft > 0) {
+                            container.scrollLeft -= AUTOPLAY_SPEED;
+
+                            // 10フレームごとに新しいページを読み込む
+                            frameCount++;
+                            if (frameCount % 10 === 0) {
+                                loadMorePagesIfNeeded();
+                                renderVisiblePages();
+                            }
+                        } else {
+                            console.log('最後のページに到達しました');
+                            toggleAutoplay();
+                        }
+                    }, 1000 / AUTOPLAY_FPS);
+                }
             });
 
             container.addEventListener('mousemove', (e) => {
@@ -414,10 +461,40 @@
                 isDragging = true;
                 startX = e.touches[0].pageX - container.offsetLeft;
                 scrollLeft = container.scrollLeft;
+
+                // 自動再生中の場合は一時停止
+                if (autoplayEnabled) {
+                    autoplayPausedByDrag = true;
+                    if (autoplayInterval) {
+                        clearInterval(autoplayInterval);
+                        autoplayInterval = null;
+                    }
+                }
             });
 
             container.addEventListener('touchend', () => {
                 isDragging = false;
+
+                // ドラッグで一時停止していた場合は再開
+                if (autoplayPausedByDrag && autoplayEnabled) {
+                    autoplayPausedByDrag = false;
+                    let frameCount = 0;
+                    autoplayInterval = setInterval(() => {
+                        if (container.scrollLeft > 0) {
+                            container.scrollLeft -= AUTOPLAY_SPEED;
+
+                            // 10フレームごとに新しいページを読み込む
+                            frameCount++;
+                            if (frameCount % 10 === 0) {
+                                loadMorePagesIfNeeded();
+                                renderVisiblePages();
+                            }
+                        } else {
+                            console.log('最後のページに到達しました');
+                            toggleAutoplay();
+                        }
+                    }, 1000 / AUTOPLAY_FPS);
+                }
             });
 
             container.addEventListener('touchmove', (e) => {
@@ -467,8 +544,61 @@
         function onSeamlessScroll() {
             clearTimeout(scrollTimeout);
             scrollTimeout = setTimeout(() => {
+                loadMorePagesIfNeeded();
                 renderVisiblePages();
             }, 100);
+        }
+
+        // 必要に応じてさらにページを読み込む
+        function loadMorePagesIfNeeded() {
+            if (!Module.ccall) return;
+
+            const container = document.getElementById('seamless-container');
+            const containerRect = container.getBoundingClientRect();
+
+            // 現在表示されている最も小さいページ番号を見つける
+            const allCanvases = Array.from(document.querySelectorAll('.page-canvas'));
+            let minVisiblePage = MAX_PAGES;
+
+            allCanvases.forEach(canvas => {
+                const rect = canvas.getBoundingClientRect();
+                // 表示範囲内または左側に近い場合
+                if (rect.right > containerRect.left - containerRect.width) {
+                    const pageNum = parseInt(canvas.dataset.pageNum);
+                    if (pageNum < minVisiblePage) {
+                        minVisiblePage = pageNum;
+                    }
+                }
+            });
+
+            // 表示中のページから先のページを追加で作成
+            const nextPageStart = Math.min(...seamlessPages) - 1;
+            const pagesToAdd = [];
+
+            // 次の10ページ分のCanvasを作成（まだ存在しない場合）
+            for (let i = nextPageStart; i > Math.max(1, nextPageStart - 10); i--) {
+                if (i >= 1 && !document.getElementById(`page-canvas-${i}`)) {
+                    pagesToAdd.push(i);
+                }
+            }
+
+            // 降順でページを追加（大きい番号から小さい番号へ）
+            pagesToAdd.sort((a, b) => b - a);
+            pagesToAdd.forEach(pageNum => {
+                const canvas = createPageCanvas(pageNum);
+                // 先頭に追加（降順なので）
+                const scrollContainer = document.getElementById('seamless-scroll');
+                const firstChild = scrollContainer.firstChild;
+                if (firstChild) {
+                    scrollContainer.insertBefore(canvas, firstChild);
+                } else {
+                    scrollContainer.appendChild(canvas);
+                }
+                console.log(`Added canvas for page ${pageNum}`);
+
+                // ページをキャッシュに読み込む
+                Module.ccall('loadPageToCache', null, ['number'], [pageNum]);
+            });
         }
 
         // 表示範囲内のページを描画
@@ -526,6 +656,53 @@
             });
         }
 
+
+        // 自動再生の切り替え
+        function toggleAutoplay() {
+            const button = document.getElementById('autoplay-button');
+            const container = document.getElementById('seamless-container');
+
+            if (!autoplayEnabled) {
+                // 自動再生を開始
+                autoplayEnabled = true;
+                button.textContent = '停止';
+                button.style.backgroundColor = 'rgba(255, 100, 100, 0.3)';
+
+                // 定期的にスクロールを進める
+                let frameCount = 0;
+                autoplayInterval = setInterval(() => {
+                    if (container.scrollLeft > 0) {
+                        // 左にスクロール（ページを読み進める）
+                        container.scrollLeft -= AUTOPLAY_SPEED;
+
+                        // 10フレームごとに新しいページを読み込む
+                        frameCount++;
+                        if (frameCount % 10 === 0) {
+                            loadMorePagesIfNeeded();
+                            renderVisiblePages();
+                        }
+                    } else {
+                        // 最後のページに到達したら自動再生を停止
+                        console.log('最後のページに到達しました');
+                        toggleAutoplay();
+                    }
+                }, 1000 / AUTOPLAY_FPS);
+
+                console.log('自動再生を開始しました');
+            } else {
+                // 自動再生を停止
+                autoplayEnabled = false;
+                button.textContent = '自動再生';
+                button.style.backgroundColor = '';
+
+                if (autoplayInterval) {
+                    clearInterval(autoplayInterval);
+                    autoplayInterval = null;
+                }
+
+                console.log('自動再生を停止しました');
+            }
+        }
 
         // 全画面表示の切り替え
         function toggleFullscreen() {

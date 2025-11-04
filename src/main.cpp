@@ -42,7 +42,7 @@ private:
     static const int PRELOAD_PAGES = 20;  // 先読みするページ数
 
 public:
-    ComicViewer() : bookId("00000001"), currentPage(1), maxPages(100),
+    ComicViewer() : bookId("00000001"), currentPage(1), maxPages(209),
                     canvasTarget("#viewer-canvas") {}
 
     void initialize(const std::string& book_id) {
