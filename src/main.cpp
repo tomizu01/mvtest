@@ -151,17 +151,52 @@ public:
     void renderPages() {
         printf("Rendering pages...\n");
 
-        // Canvasのサイズを取得
+        // Canvasのサイズを取得（ウィンドウサイズ）
         double canvasWidth, canvasHeight;
         emscripten_get_element_css_size(canvasTarget, &canvasWidth, &canvasHeight);
 
-        // 実際のCanvasサイズを設定（高解像度対応）
-        int displayWidth = (int)canvasWidth;
-        int displayHeight = (int)canvasHeight;
+        // 見開き2ページ分の合計サイズを計算
+        int totalImageWidth = 0;
+        int maxImageHeight = 0;
 
-        emscripten_set_canvas_element_size(canvasTarget, displayWidth, displayHeight);
+        if (pageImages[0].loaded) {
+            totalImageWidth += pageImages[0].width;
+            maxImageHeight = pageImages[0].height;
+        }
+        if (pageImages[1].loaded) {
+            totalImageWidth += pageImages[1].width;
+            if (pageImages[1].height > maxImageHeight) {
+                maxImageHeight = pageImages[1].height;
+            }
+        }
 
-        // 2Dコンテキストを取得してJavaScript側で描画
+        // アスペクト比を保持しながら画面いっぱいに表示するサイズを計算
+        double imageAspect = (double)totalImageWidth / maxImageHeight;
+        double screenAspect = canvasWidth / canvasHeight;
+
+        int displayWidth, displayHeight;
+        int offsetX = 0, offsetY = 0;
+
+        if (imageAspect > screenAspect) {
+            // 画像が横長：幅を基準にする
+            displayWidth = (int)canvasWidth;
+            displayHeight = (int)(canvasWidth / imageAspect);
+            offsetY = ((int)canvasHeight - displayHeight) / 2;
+        } else {
+            // 画像が縦長：高さを基準にする
+            displayHeight = (int)canvasHeight;
+            displayWidth = (int)(canvasHeight * imageAspect);
+            offsetX = ((int)canvasWidth - displayWidth) / 2;
+        }
+
+        printf("Canvas: %.0fx%.0f, Image: %dx%d, Display: %dx%d, Offset: %d,%d\n",
+               canvasWidth, canvasHeight, totalImageWidth, maxImageHeight,
+               displayWidth, displayHeight, offsetX, offsetY);
+
+        // Canvasサイズを設定
+        emscripten_set_canvas_element_size(canvasTarget, (int)canvasWidth, (int)canvasHeight);
+
+        // 背景をクリア
         EM_ASM({
             const canvas = document.getElementById('viewer-canvas');
             const ctx = canvas.getContext('2d');
@@ -169,14 +204,28 @@ public:
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         });
 
+        // 各ページの幅を計算（比率を保持）
+        int page0Width = 0, page1Width = 0;
+        if (pageImages[0].loaded && pageImages[1].loaded) {
+            // 両方読み込まれている場合
+            double ratio0 = (double)pageImages[0].width / totalImageWidth;
+            double ratio1 = (double)pageImages[1].width / totalImageWidth;
+            page0Width = (int)(displayWidth * ratio0);
+            page1Width = (int)(displayWidth * ratio1);
+        } else if (pageImages[0].loaded) {
+            page0Width = displayWidth;
+        } else if (pageImages[1].loaded) {
+            page1Width = displayWidth;
+        }
+
         // 右ページ（1ページ目）を描画
         if (pageImages[0].loaded) {
-            drawImageToCanvas(0, displayWidth / 2, 0, displayWidth / 2, displayHeight);
+            drawImageToCanvas(0, offsetX + page1Width, offsetY, page0Width, displayHeight);
         }
 
         // 左ページ（2ページ目）を描画
         if (pageImages[1].loaded) {
-            drawImageToCanvas(1, 0, 0, displayWidth / 2, displayHeight);
+            drawImageToCanvas(1, offsetX, offsetY, page1Width, displayHeight);
         }
     }
 
@@ -231,6 +280,13 @@ public:
             printf("Previous page: %d\n", currentPage);
         }
     }
+
+    void refresh() {
+        // 現在のページを再描画
+        if (pageImages[0].loaded || pageImages[1].loaded) {
+            renderPages();
+        }
+    }
 };
 
 // グローバルインスタンス
@@ -257,6 +313,13 @@ extern "C" {
     void prevPage() {
         if (viewer) {
             viewer->prevPage();
+        }
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    void refresh() {
+        if (viewer) {
+            viewer->refresh();
         }
     }
 }
