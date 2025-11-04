@@ -391,6 +391,32 @@ public:
         checkAndRender();
     }
 
+    // 単一ページを指定したCanvasに描画（シームレスモード用）
+    void renderSinglePage(int pageNum, const char* targetCanvas) {
+        if (pageNum < 1 || pageNum > maxPages) {
+            printf("Page %d out of range\n", pageNum);
+            return;
+        }
+
+        // ページが読み込まれているか確認
+        if (pageCache.find(pageNum) == pageCache.end() || !pageCache[pageNum].loaded) {
+            printf("Page %d not loaded yet\n", pageNum);
+            return;
+        }
+
+        ImageData& img = pageCache[pageNum];
+        printf("Rendering page %d (size: %dx%d) to canvas %s\n", pageNum, img.width, img.height, targetCanvas);
+
+        // JavaScript側の関数を呼び出して描画
+        EM_ASM({
+            if (window.renderPageToCanvas) {
+                window.renderPageToCanvas(UTF8ToString($0), $1, $2, $3, $4);
+            }
+        }, targetCanvas, img.width, img.height, img.data.data(), img.data.size());
+
+        printf("Rendered page %d to canvas %s (completed)\n", pageNum, targetCanvas);
+    }
+
     void printCacheStatus() {
         printf("=== Cache Status ===\n");
         printf("Current Page: %d\n", currentPage);
@@ -453,6 +479,20 @@ extern "C" {
     void preloadPagesDelayed() {
         if (viewer) {
             viewer->preloadPagesDelayed();
+        }
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    void renderSinglePage(int pageNum, const char* canvasId) {
+        if (viewer) {
+            viewer->renderSinglePage(pageNum, canvasId);
+        }
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    void loadPageToCache(int pageNum) {
+        if (viewer) {
+            viewer->loadPageToCache(pageNum);
         }
     }
 }
