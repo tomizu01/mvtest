@@ -134,7 +134,6 @@
 
         .page-canvas {
             height: 100vh;
-            min-width: 50vw;
             flex-shrink: 0;
             background-color: #111;
         }
@@ -269,34 +268,27 @@
                 return;
             }
 
-            const canvasWidth = canvas.width;
-            const canvasHeight = canvas.height;
-
-            console.log(`Canvas ${canvasId} size: ${canvasWidth}x${canvasHeight}`);
-            console.log(`Image size: ${imgWidth}x${imgHeight}`);
-
-            // アスペクト比を保持しながらCanvasに収めるサイズを計算
+            // 画像のアスペクト比に基づいてCanvasの幅を調整
             const imageAspect = imgWidth / imgHeight;
-            const screenAspect = canvasWidth / canvasHeight;
+            const canvasHeight = window.innerHeight;
+            const optimalWidth = Math.floor(canvasHeight * imageAspect);
 
-            let displayWidth, displayHeight;
-            let offsetX = 0, offsetY = 0;
+            // Canvasのサイズを画像に合わせて調整
+            canvas.width = optimalWidth;
+            canvas.height = canvasHeight;
+            canvas.style.width = optimalWidth + 'px';
+            canvas.style.height = '100vh';
 
-            if (imageAspect > screenAspect) {
-                displayWidth = canvasWidth;
-                displayHeight = canvasWidth / imageAspect;
-                offsetY = (canvasHeight - displayHeight) / 2;
-            } else {
-                displayHeight = canvasHeight;
-                displayWidth = canvasHeight * imageAspect;
-                offsetX = (canvasWidth - displayWidth) / 2;
-            }
+            console.log(`Canvas ${canvasId} adjusted to: ${optimalWidth}x${canvasHeight}`);
+            console.log(`Image size: ${imgWidth}x${imgHeight}, aspect: ${imageAspect}`);
 
-            console.log(`Display size: ${displayWidth}x${displayHeight} at offset (${offsetX}, ${offsetY})`);
+            // 画像を画面いっぱいに描画（アスペクト比維持）
+            const displayWidth = optimalWidth;
+            const displayHeight = canvasHeight;
 
             // 背景をクリア
             ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+            ctx.fillRect(0, 0, optimalWidth, canvasHeight);
 
             // メモリからデータを取得
             let heap;
@@ -320,8 +312,8 @@
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.putImageData(imageData, 0, 0);
 
-            // メインCanvasにリサイズして描画
-            ctx.drawImage(tempCanvas, offsetX, offsetY, displayWidth, displayHeight);
+            // メインCanvasいっぱいに描画
+            ctx.drawImage(tempCanvas, 0, 0, displayWidth, displayHeight);
 
             console.log(`Rendered page to canvas ${canvasId}`);
         };
@@ -454,10 +446,13 @@
             canvas.dataset.pageNum = pageNum;
             canvas.dataset.loaded = 'false';
 
-            // Canvasのサイズを明示的に設定
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            canvas.style.width = 'auto';
+            // 一般的なマンガのアスペクト比（2:3）で初期サイズを設定
+            const canvasHeight = window.innerHeight;
+            const canvasWidth = Math.floor(canvasHeight * (2 / 3));
+
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            canvas.style.width = canvasWidth + 'px';
             canvas.style.height = '100vh';
 
             seamlessPages.push(pageNum);
@@ -473,7 +468,6 @@
             clearTimeout(scrollTimeout);
             scrollTimeout = setTimeout(() => {
                 renderVisiblePages();
-                loadNearbyPages();
             }, 100);
         }
 
@@ -512,13 +506,11 @@
                     const maxRetries = 10;
                     const tryRender = () => {
                         try {
-                            console.log(`Attempting to render page ${pageNum} (attempt ${retryCount + 1}/${maxRetries})`);
                             Module.ccall('renderSinglePage', null, ['number', 'string'],
                                        [pageNum, `page-canvas-${pageNum}`]);
                             canvas.dataset.loaded = 'true';
                             console.log(`Successfully rendered page ${pageNum}`);
                         } catch (e) {
-                            console.error(`Failed to render page ${pageNum} (attempt ${retryCount + 1}):`, e);
                             retryCount++;
                             if (retryCount < maxRetries) {
                                 setTimeout(tryRender, 300);
@@ -529,67 +521,11 @@
                         }
                     };
 
-                    setTimeout(tryRender, 500);
+                    setTimeout(tryRender, 200);
                 }
             });
         }
 
-        // 近くのページを先読み
-        function loadNearbyPages() {
-            if (!Module.ccall) return;
-
-            const container = document.getElementById('seamless-container');
-            const scrollLeft = container.scrollLeft;
-            const containerWidth = container.clientWidth;
-
-            // スクロール位置から表示中のページ番号を推定（右から左なので逆計算）
-            const scrollFromRight = container.scrollWidth - scrollLeft - containerWidth;
-            const estimatedPage = Math.floor(scrollFromRight / containerWidth) + 1;
-
-            // 前後のページを読み込む
-            for (let offset = -SEAMLESS_PRELOAD_RANGE; offset <= SEAMLESS_PRELOAD_RANGE; offset++) {
-                const pageNum = estimatedPage + offset;
-                if (pageNum >= 1 && pageNum <= MAX_PAGES) {
-                    Module.ccall('loadPageToCache', null, ['number'], [pageNum]);
-
-                    // Canvasが存在しない場合は作成
-                    if (!document.getElementById(`page-canvas-${pageNum}`)) {
-                        const canvas = createPageCanvas(pageNum);
-                        insertCanvasInOrder(canvas);
-                    }
-                }
-            }
-        }
-
-        // Canvasを正しい順序で挿入（降順：大きい番号が左、小さい番号が右）
-        function insertCanvasInOrder(canvas) {
-            const pageNum = parseInt(canvas.dataset.pageNum);
-            const scrollContainer = document.getElementById('seamless-scroll');
-            const existingCanvases = Array.from(scrollContainer.querySelectorAll('.page-canvas'));
-
-            // 既に追加されている場合はスキップ
-            if (existingCanvases.find(c => parseInt(c.dataset.pageNum) === pageNum)) {
-                return;
-            }
-
-            // 挿入位置を見つける（降順：大きい番号から小さい番号へ）
-            let inserted = false;
-            for (let i = 0; i < existingCanvases.length; i++) {
-                const existingPageNum = parseInt(existingCanvases[i].dataset.pageNum);
-
-                // 新しいページの番号が既存のページより大きければ、その前に挿入
-                if (pageNum > existingPageNum) {
-                    scrollContainer.insertBefore(canvas, existingCanvases[i]);
-                    inserted = true;
-                    break;
-                }
-            }
-
-            // どこにも挿入されなかった場合は最後に追加
-            if (!inserted) {
-                scrollContainer.appendChild(canvas);
-            }
-        }
 
         // 全画面表示の切り替え
         function toggleFullscreen() {
