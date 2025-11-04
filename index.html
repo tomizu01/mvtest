@@ -68,6 +68,47 @@
             color: white;
             font-size: 24px;
         }
+
+        /* ナビゲーションバー */
+        #nav-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0));
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            z-index: 20;
+            transition: opacity 0.3s;
+        }
+
+        #nav-bar.hide {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .nav-bar-button {
+            padding: 10px 20px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+
+        .nav-bar-button:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .nav-bar-button:active {
+            background-color: rgba(255, 255, 255, 0.4);
+        }
     </style>
 </head>
 <body>
@@ -76,6 +117,11 @@
         <canvas id="viewer-canvas"></canvas>
         <button id="next-button" class="nav-button" onclick="nextPage()">❮</button>
         <button id="prev-button" class="nav-button" onclick="prevPage()">❯</button>
+
+        <!-- ナビゲーションバー -->
+        <div id="nav-bar">
+            <button class="nav-bar-button" onclick="toggleFullscreen()">全画面</button>
+        </div>
     </div>
 
     <script>
@@ -158,6 +204,57 @@
                 Module.ccall('printCacheStatus', null, [], []);
             }
         }
+
+        // 全画面表示の切り替え
+        function toggleFullscreen() {
+            const container = document.getElementById('container');
+
+            if (!document.fullscreenElement) {
+                // 全画面モードに入る
+                if (container.requestFullscreen) {
+                    container.requestFullscreen().catch(err => {
+                        console.error('全画面表示に失敗:', err);
+                    });
+                } else if (container.webkitRequestFullscreen) {
+                    // Safari対応
+                    container.webkitRequestFullscreen();
+                } else if (container.msRequestFullscreen) {
+                    // IE11対応
+                    container.msRequestFullscreen();
+                }
+            } else {
+                // 全画面モードから抜ける
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+            }
+        }
+
+        // 全画面モードの変化を検知
+        document.addEventListener('fullscreenchange', function() {
+            const navBar = document.getElementById('nav-bar');
+            if (document.fullscreenElement) {
+                console.log('全画面モードに入りました');
+                navBar.classList.add('hide');
+            } else {
+                console.log('全画面モードから抜けました');
+                navBar.classList.remove('hide');
+            }
+        });
+
+        // Safari用
+        document.addEventListener('webkitfullscreenchange', function() {
+            const navBar = document.getElementById('nav-bar');
+            if (document.webkitFullscreenElement) {
+                navBar.classList.add('hide');
+            } else {
+                navBar.classList.remove('hide');
+            }
+        });
 
         // キーボードショートカット
         document.addEventListener('keydown', function(e) {
