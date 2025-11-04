@@ -152,6 +152,24 @@
             }
         }
 
+        // キャッシュステータスを表示（デバッグ用）
+        function showCacheStatus() {
+            if (Module.ccall) {
+                Module.ccall('printCacheStatus', null, [], []);
+            }
+        }
+
+        // キーボードショートカット
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowLeft') {
+                nextPage();
+            } else if (e.key === 'ArrowRight') {
+                prevPage();
+            } else if (e.key === 'c' || e.key === 'C') {
+                showCacheStatus();
+            }
+        });
+
         // スクリプトロードのエラーハンドリング
         window.addEventListener('error', function(e) {
             console.error('Script error:', e);
