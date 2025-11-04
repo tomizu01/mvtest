@@ -369,24 +369,42 @@
         const AUTOPLAY_SPEED = 4; // 1フレームあたりのスクロール量（ピクセル）
         const AUTOPLAY_FPS = 30; // フレームレート
 
+        // 画面が横長かどうかを判定
+        function isLandscape() {
+            return window.innerWidth > window.innerHeight;
+        }
+
         // モード切り替え
         function toggleViewMode() {
             if (viewMode === 'normal') {
-                // シームレスモードに切り替え（横読みから開始）
-                seamlessDirection = 'horizontal';
-                viewMode = 'seamless-horizontal';
-                document.getElementById('seamless-container').classList.add('active');
-                document.getElementById('vertical-container').classList.remove('active');
+                // シームレスモードに切り替え（画面サイズに応じて初期モードを決定）
+                const landscape = isLandscape();
+                seamlessDirection = landscape ? 'horizontal' : 'vertical';
+                viewMode = landscape ? 'seamless-horizontal' : 'seamless-vertical';
+
                 document.getElementById('normal-mode-content').style.display = 'none';
                 document.querySelector('.nav-bar-button').textContent = '見開き表示';
 
                 // 方向切り替えボタンと自動再生ボタンを表示
                 document.getElementById('direction-button').style.display = 'block';
-                document.getElementById('direction-button').textContent = '縦読み';
                 document.getElementById('autoplay-button').style.display = 'block';
 
-                // シームレスモードを初期化
-                initSeamlessMode();
+                // 画面の向きに応じて初期化
+                if (landscape) {
+                    // 横長 → 横読みモード
+                    document.getElementById('seamless-container').classList.add('active');
+                    document.getElementById('vertical-container').classList.remove('active');
+                    document.getElementById('direction-button').textContent = '縦読み';
+                    initSeamlessMode();
+                    console.log('画面が横長のため、横読みモードで開始');
+                } else {
+                    // 縦長 → 縦読みモード
+                    document.getElementById('seamless-container').classList.remove('active');
+                    document.getElementById('vertical-container').classList.add('active');
+                    document.getElementById('direction-button').textContent = '横読み';
+                    initVerticalMode();
+                    console.log('画面が縦長のため、縦読みモードで開始');
+                }
             } else {
                 // 通常モードに切り替え
                 viewMode = 'normal';
@@ -1085,17 +1103,66 @@
             console.error('Script error:', e);
         });
 
-        // ウィンドウリサイズ時に再描画
+        // ウィンドウリサイズ時に再描画 & モード自動切り替え
         let resizeTimer;
+        let previousOrientation = isLandscape(); // 前回の画面の向きを記憶
         window.addEventListener('resize', function() {
             clearTimeout(resizeTimer);
             resizeTimer = setTimeout(function() {
                 console.log('Window resized, re-rendering...');
-                if (Module.ccall) {
-                    try {
-                        Module.ccall('refresh', null, [], []);
-                    } catch (e) {
-                        console.error('Error in resize handler:', e);
+
+                const currentOrientation = isLandscape();
+
+                // シームレスモード中で、画面の向きが変わった場合は自動的にモードを切り替え
+                if (viewMode !== 'normal' && currentOrientation !== previousOrientation) {
+                    console.log(`画面の向きが変わりました: ${currentOrientation ? '横長' : '縦長'}`);
+
+                    // 自動再生中の場合は一時停止
+                    const wasAutoplayEnabled = autoplayEnabled;
+                    if (autoplayEnabled) {
+                        toggleAutoplay();
+                    }
+
+                    if (currentOrientation) {
+                        // 横長になった → 横読みモードに切り替え
+                        if (seamlessDirection !== 'horizontal') {
+                            seamlessDirection = 'horizontal';
+                            viewMode = 'seamless-horizontal';
+                            document.getElementById('seamless-container').classList.add('active');
+                            document.getElementById('vertical-container').classList.remove('active');
+                            document.getElementById('direction-button').textContent = '縦読み';
+                            initSeamlessMode();
+                            console.log('横読みモードに自動切り替え');
+                        }
+                    } else {
+                        // 縦長になった → 縦読みモードに切り替え
+                        if (seamlessDirection !== 'vertical') {
+                            seamlessDirection = 'vertical';
+                            viewMode = 'seamless-vertical';
+                            document.getElementById('seamless-container').classList.remove('active');
+                            document.getElementById('vertical-container').classList.add('active');
+                            document.getElementById('direction-button').textContent = '横読み';
+                            initVerticalMode();
+                            console.log('縦読みモードに自動切り替え');
+                        }
+                    }
+
+                    // 自動再生が有効だった場合は再開
+                    if (wasAutoplayEnabled) {
+                        setTimeout(() => {
+                            toggleAutoplay();
+                        }, 500);
+                    }
+
+                    previousOrientation = currentOrientation;
+                } else if (viewMode === 'normal') {
+                    // 通常モードの場合は再描画のみ
+                    if (Module.ccall) {
+                        try {
+                            Module.ccall('refresh', null, [], []);
+                        } catch (e) {
+                            console.error('Error in resize handler:', e);
+                        }
                     }
                 }
             }, 250);
