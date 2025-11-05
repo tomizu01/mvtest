@@ -90,6 +90,11 @@
             pointer-events: none;
         }
 
+        #nav-bar.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
         .nav-bar-button {
             padding: 10px 20px;
             background-color: rgba(255, 255, 255, 0.2);
@@ -1416,25 +1421,103 @@
             }
         }
 
-        // 全画面モードの変化を検知
+        // ナビゲーションバーの自動表示/非表示管理
+        let navBarTimeout;
+        let isMouseOverNavBar = false;
+        const NAV_BAR_ZONE_HEIGHT = 100; // 画面下部から何ピクセルの範囲で表示するか
+        const NAV_BAR_HIDE_DELAY = 3000; // 3秒後に自動で非表示
+
+        // 初期状態で非表示
+        const navBar = document.getElementById('nav-bar');
+        navBar.classList.add('hide');
+
+        // ナビゲーションバーを表示する関数
+        function showNavBar() {
+            navBar.classList.remove('hide');
+            navBar.classList.add('show');
+
+            // 既存のタイマーをクリア
+            clearTimeout(navBarTimeout);
+
+            // 3秒後に自動で非表示にする（ナビゲーションバー上にマウスがない場合）
+            navBarTimeout = setTimeout(() => {
+                if (!isMouseOverNavBar) {
+                    hideNavBar();
+                }
+            }, NAV_BAR_HIDE_DELAY);
+        }
+
+        // ナビゲーションバーを非表示にする関数
+        function hideNavBar() {
+            if (!isMouseOverNavBar) {
+                navBar.classList.remove('show');
+                navBar.classList.add('hide');
+            }
+        }
+
+        // マウスムーブで画面下部に入ったら表示
+        document.addEventListener('mousemove', function(e) {
+            const windowHeight = window.innerHeight;
+            const mouseY = e.clientY;
+
+            // 画面下部のゾーンに入ったら表示
+            if (mouseY > windowHeight - NAV_BAR_ZONE_HEIGHT) {
+                showNavBar();
+            }
+        });
+
+        // 画面下部のクリック/タップで表示
+        document.addEventListener('click', function(e) {
+            const windowHeight = window.innerHeight;
+            const clickY = e.clientY;
+
+            // 画面下部がクリックされたら表示
+            if (clickY > windowHeight - NAV_BAR_ZONE_HEIGHT) {
+                showNavBar();
+            }
+        });
+
+        // タッチイベント（モバイル対応）
+        document.addEventListener('touchstart', function(e) {
+            const windowHeight = window.innerHeight;
+            const touch = e.touches[0];
+            const touchY = touch.clientY;
+
+            // 画面下部がタップされたら表示
+            if (touchY > windowHeight - NAV_BAR_ZONE_HEIGHT) {
+                showNavBar();
+            }
+        });
+
+        // ナビゲーションバーにマウスが乗っている間は非表示にしない
+        navBar.addEventListener('mouseenter', function() {
+            isMouseOverNavBar = true;
+            clearTimeout(navBarTimeout);
+        });
+
+        navBar.addEventListener('mouseleave', function() {
+            isMouseOverNavBar = false;
+            // マウスが離れたら3秒後に非表示
+            navBarTimeout = setTimeout(() => {
+                hideNavBar();
+            }, NAV_BAR_HIDE_DELAY);
+        });
+
+        // 全画面モードの変化を検知（ログのみ）
         document.addEventListener('fullscreenchange', function() {
-            const navBar = document.getElementById('nav-bar');
             if (document.fullscreenElement) {
                 console.log('全画面モードに入りました');
-                navBar.classList.add('hide');
             } else {
                 console.log('全画面モードから抜けました');
-                navBar.classList.remove('hide');
             }
         });
 
         // Safari用
         document.addEventListener('webkitfullscreenchange', function() {
-            const navBar = document.getElementById('nav-bar');
             if (document.webkitFullscreenElement) {
-                navBar.classList.add('hide');
+                console.log('全画面モードに入りました (webkit)');
             } else {
-                navBar.classList.remove('hide');
+                console.log('全画面モードから抜けました (webkit)');
             }
         });
 
