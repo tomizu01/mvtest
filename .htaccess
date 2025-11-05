@@ -1,0 +1,5 @@
+# Basic認証をコメントアウト（Docker開発環境用）
+AuthUserFile "/var/www/private/.htpasswd"
+AuthName "Please enter your ID and Password."
+AuthType BASIC
+require valid-user
