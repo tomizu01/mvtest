@@ -178,9 +178,52 @@
         #container.seamless-mode #normal-mode-content {
             display: none;
         }
+
+        /* スプラッシュ画面 */
+        #splash-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.8s ease-out;
+        }
+
+        #splash-screen.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #splash-logo {
+            max-width: 80%;
+            max-height: 80%;
+            object-fit: contain;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 0.8;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 1;
+                transform: scale(1.05);
+            }
+        }
     </style>
 </head>
 <body>
+    <!-- スプラッシュ画面 -->
+    <div id="splash-screen">
+        <img id="splash-logo" src="public/images/mukuviewer.png" alt="mukuviewer">
+    </div>
+
     <div id="container">
         <div id="loading">Loading...</div>
 
@@ -234,6 +277,16 @@
                 console.log('postRun called');
                 document.getElementById('loading').style.display = 'none';
                 console.log('Loading hidden');
+
+                // スプラッシュ画面をフェードアウト
+                setTimeout(() => {
+                    const splashScreen = document.getElementById('splash-screen');
+                    splashScreen.classList.add('fade-out');
+                    // フェードアウト完了後に要素を削除
+                    setTimeout(() => {
+                        splashScreen.style.display = 'none';
+                    }, 800);
+                }, 500); // 0.5秒後にフェードアウト開始
             }],
             onRuntimeInitialized: function() {
                 console.log('onRuntimeInitialized called');
