@@ -40,10 +40,11 @@ private:
     std::set<int> loadingPages;          // 読み込み中のページ番号
     const char* canvasTarget;
     static const int PRELOAD_PAGES = 20;  // 先読みするページ数
+    bool singlePageMode;  // true: 1ページずつ表示, false: 2ページ表示
 
 public:
     ComicViewer() : bookId("00000001"), currentPage(1), maxPages(209),
-                    canvasTarget("#viewer-canvas") {}
+                    canvasTarget("#viewer-canvas"), singlePageMode(false) {}
 
     void initialize(const std::string& book_id) {
         bookId = book_id;
@@ -53,10 +54,26 @@ public:
         preloadPages();
     }
 
+    void setSinglePageMode(bool enabled) {
+        singlePageMode = enabled;
+        printf("Single page mode: %s\n", enabled ? "ON" : "OFF");
+        // モードが変わったら再描画
+        checkAndRender();
+    }
+
+    bool isSinglePageMode() const {
+        return singlePageMode;
+    }
+
     void loadCurrentPages() {
-        printf("Loading pages %d and %d\n", currentPage, currentPage + 1);
-        loadPageToCache(currentPage);
-        loadPageToCache(currentPage + 1);
+        if (singlePageMode) {
+            printf("Loading page %d\n", currentPage);
+            loadPageToCache(currentPage);
+        } else {
+            printf("Loading pages %d and %d\n", currentPage, currentPage + 1);
+            loadPageToCache(currentPage);
+            loadPageToCache(currentPage + 1);
+        }
     }
 
     void loadPageToCache(int pageNum) {
@@ -222,35 +239,52 @@ public:
         // 現在表示すべきページが読み込まれているか確認
         bool page0Ready = (pageCache.find(currentPage) != pageCache.end() &&
                           pageCache[currentPage].loaded);
-        bool page1Ready = (pageCache.find(currentPage + 1) != pageCache.end() &&
-                          pageCache[currentPage + 1].loaded);
 
-        if (page0Ready || page1Ready) {
-            renderPages();
+        if (singlePageMode) {
+            // 1ページモード：現在のページが読み込まれていれば描画
+            if (page0Ready) {
+                renderPages();
+            }
+        } else {
+            // 2ページモード：どちらか一方でも読み込まれていれば描画
+            bool page1Ready = (pageCache.find(currentPage + 1) != pageCache.end() &&
+                              pageCache[currentPage + 1].loaded);
+            if (page0Ready || page1Ready) {
+                renderPages();
+            }
         }
     }
 
     void renderPages() {
-        printf("Rendering pages %d and %d...\n", currentPage, currentPage + 1);
+        if (singlePageMode) {
+            printf("Rendering page %d...\n", currentPage);
+        } else {
+            printf("Rendering pages %d and %d...\n", currentPage, currentPage + 1);
+        }
 
         // Canvasのサイズを取得（ウィンドウサイズ）
         double canvasWidth, canvasHeight;
         emscripten_get_element_css_size(canvasTarget, &canvasWidth, &canvasHeight);
 
-        // 見開き2ページ分の合計サイズを計算
-        int totalImageWidth = 0;
-        int maxImageHeight = 0;
-
+        // ページの存在確認
         bool page0Exists = (pageCache.find(currentPage) != pageCache.end() &&
                            pageCache[currentPage].loaded);
-        bool page1Exists = (pageCache.find(currentPage + 1) != pageCache.end() &&
-                           pageCache[currentPage + 1].loaded);
+        bool page1Exists = false;
+
+        if (!singlePageMode) {
+            page1Exists = (pageCache.find(currentPage + 1) != pageCache.end() &&
+                          pageCache[currentPage + 1].loaded);
+        }
+
+        // 表示するページの合計サイズを計算
+        int totalImageWidth = 0;
+        int maxImageHeight = 0;
 
         if (page0Exists) {
             totalImageWidth += pageCache[currentPage].width;
             maxImageHeight = pageCache[currentPage].height;
         }
-        if (page1Exists) {
+        if (!singlePageMode && page1Exists) {
             totalImageWidth += pageCache[currentPage + 1].width;
             if (pageCache[currentPage + 1].height > maxImageHeight) {
                 maxImageHeight = pageCache[currentPage + 1].height;
@@ -298,26 +332,43 @@ public:
 
         // 各ページの幅を計算（比率を保持）
         int page0Width = 0, page1Width = 0;
-        if (page0Exists && page1Exists) {
-            // 両方読み込まれている場合
-            double ratio0 = (double)pageCache[currentPage].width / totalImageWidth;
-            double ratio1 = (double)pageCache[currentPage + 1].width / totalImageWidth;
-            page0Width = (int)(displayWidth * ratio0);
-            page1Width = (int)(displayWidth * ratio1);
-        } else if (page0Exists) {
-            page0Width = displayWidth;
-        } else if (page1Exists) {
-            page1Width = displayWidth;
+
+        if (singlePageMode) {
+            // 1ページモード：1ページのみ表示
+            if (page0Exists) {
+                page0Width = displayWidth;
+            }
+        } else {
+            // 2ページモード：見開き表示
+            if (page0Exists && page1Exists) {
+                // 両方読み込まれている場合
+                double ratio0 = (double)pageCache[currentPage].width / totalImageWidth;
+                double ratio1 = (double)pageCache[currentPage + 1].width / totalImageWidth;
+                page0Width = (int)(displayWidth * ratio0);
+                page1Width = (int)(displayWidth * ratio1);
+            } else if (page0Exists) {
+                page0Width = displayWidth;
+            } else if (page1Exists) {
+                page1Width = displayWidth;
+            }
         }
 
-        // 右ページ（1ページ目）を描画
-        if (page0Exists) {
-            drawImageToCanvas(currentPage, offsetX + page1Width, offsetY, page0Width, displayHeight);
-        }
+        if (singlePageMode) {
+            // 1ページモード：中央に1ページのみ表示
+            if (page0Exists) {
+                drawImageToCanvas(currentPage, offsetX, offsetY, page0Width, displayHeight);
+            }
+        } else {
+            // 2ページモード：見開き表示
+            // 右ページ（1ページ目）を描画
+            if (page0Exists) {
+                drawImageToCanvas(currentPage, offsetX + page1Width, offsetY, page0Width, displayHeight);
+            }
 
-        // 左ページ（2ページ目）を描画
-        if (page1Exists) {
-            drawImageToCanvas(currentPage + 1, offsetX, offsetY, page1Width, displayHeight);
+            // 左ページ（2ページ目）を描画
+            if (page1Exists) {
+                drawImageToCanvas(currentPage + 1, offsetX, offsetY, page1Width, displayHeight);
+            }
         }
     }
 
@@ -361,8 +412,9 @@ public:
     }
 
     void nextPage() {
-        if (currentPage + 2 <= maxPages) {
-            currentPage += 2;
+        int increment = singlePageMode ? 1 : 2;
+        if (currentPage + increment <= maxPages) {
+            currentPage += increment;
             printf("Next page: %d\n", currentPage);
 
             // キャッシュから即座に描画
@@ -374,8 +426,9 @@ public:
     }
 
     void prevPage() {
+        int decrement = singlePageMode ? 1 : 2;
         if (currentPage > 1) {
-            currentPage = (currentPage - 2 < 1) ? 1 : currentPage - 2;
+            currentPage = (currentPage - decrement < 1) ? 1 : currentPage - decrement;
             printf("Previous page: %d\n", currentPage);
 
             // キャッシュから即座に描画
@@ -493,6 +546,13 @@ extern "C" {
     void loadPageToCache(int pageNum) {
         if (viewer) {
             viewer->loadPageToCache(pageNum);
+        }
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    void setSinglePageMode(bool enabled) {
+        if (viewer) {
+            viewer->setSinglePageMode(enabled);
         }
     }
 }

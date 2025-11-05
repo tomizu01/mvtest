@@ -241,6 +241,12 @@
                     if (Module.ccall) {
                         console.log('Calling initialize with bookId:', bookId);
                         Module.ccall('initialize', null, ['string'], [bookId]);
+
+                        // 画面の向きに応じて1ページモード/2ページモードを設定
+                        const landscape = isLandscape();
+                        const singlePage = !landscape; // 縦長の場合は1ページモード
+                        Module.ccall('setSinglePageMode', null, ['boolean'], [singlePage]);
+                        console.log(`初期表示モード: ${landscape ? '2ページ（横長）' : '1ページ（縦長）'}`);
                     } else {
                         console.error('Module.ccall is not available');
                     }
@@ -1113,51 +1119,66 @@
 
                 const currentOrientation = isLandscape();
 
-                // シームレスモード中で、画面の向きが変わった場合は自動的にモードを切り替え
-                if (viewMode !== 'normal' && currentOrientation !== previousOrientation) {
-                    console.log(`画面の向きが変わりました: ${currentOrientation ? '横長' : '縦長'}`);
+                if (viewMode !== 'normal') {
+                    // シームレスモード中で、画面の向きが変わった場合は自動的にモードを切り替え
+                    if (currentOrientation !== previousOrientation) {
+                        console.log(`画面の向きが変わりました: ${currentOrientation ? '横長' : '縦長'}`);
 
-                    // 自動再生中の場合は一時停止
-                    const wasAutoplayEnabled = autoplayEnabled;
-                    if (autoplayEnabled) {
-                        toggleAutoplay();
-                    }
-
-                    if (currentOrientation) {
-                        // 横長になった → 横読みモードに切り替え
-                        if (seamlessDirection !== 'horizontal') {
-                            seamlessDirection = 'horizontal';
-                            viewMode = 'seamless-horizontal';
-                            document.getElementById('seamless-container').classList.add('active');
-                            document.getElementById('vertical-container').classList.remove('active');
-                            document.getElementById('direction-button').textContent = '縦読み';
-                            initSeamlessMode();
-                            console.log('横読みモードに自動切り替え');
-                        }
-                    } else {
-                        // 縦長になった → 縦読みモードに切り替え
-                        if (seamlessDirection !== 'vertical') {
-                            seamlessDirection = 'vertical';
-                            viewMode = 'seamless-vertical';
-                            document.getElementById('seamless-container').classList.remove('active');
-                            document.getElementById('vertical-container').classList.add('active');
-                            document.getElementById('direction-button').textContent = '横読み';
-                            initVerticalMode();
-                            console.log('縦読みモードに自動切り替え');
-                        }
-                    }
-
-                    // 自動再生が有効だった場合は再開
-                    if (wasAutoplayEnabled) {
-                        setTimeout(() => {
+                        // 自動再生中の場合は一時停止
+                        const wasAutoplayEnabled = autoplayEnabled;
+                        if (autoplayEnabled) {
                             toggleAutoplay();
-                        }, 500);
-                    }
+                        }
 
-                    previousOrientation = currentOrientation;
+                        if (currentOrientation) {
+                            // 横長になった → 横読みモードに切り替え
+                            if (seamlessDirection !== 'horizontal') {
+                                seamlessDirection = 'horizontal';
+                                viewMode = 'seamless-horizontal';
+                                document.getElementById('seamless-container').classList.add('active');
+                                document.getElementById('vertical-container').classList.remove('active');
+                                document.getElementById('direction-button').textContent = '縦読み';
+                                initSeamlessMode();
+                                console.log('横読みモードに自動切り替え');
+                            }
+                        } else {
+                            // 縦長になった → 縦読みモードに切り替え
+                            if (seamlessDirection !== 'vertical') {
+                                seamlessDirection = 'vertical';
+                                viewMode = 'seamless-vertical';
+                                document.getElementById('seamless-container').classList.remove('active');
+                                document.getElementById('vertical-container').classList.add('active');
+                                document.getElementById('direction-button').textContent = '横読み';
+                                initVerticalMode();
+                                console.log('縦読みモードに自動切り替え');
+                            }
+                        }
+
+                        // 自動再生が有効だった場合は再開
+                        if (wasAutoplayEnabled) {
+                            setTimeout(() => {
+                                toggleAutoplay();
+                            }, 500);
+                        }
+
+                        previousOrientation = currentOrientation;
+                    }
                 } else if (viewMode === 'normal') {
-                    // 通常モードの場合は再描画のみ
-                    if (Module.ccall) {
+                    // 通常モード（見開きモード）の場合
+                    if (currentOrientation !== previousOrientation && Module.ccall) {
+                        // 画面の向きが変わった場合、1ページ/2ページモードを切り替え
+                        const singlePage = !currentOrientation; // 縦長の場合は1ページモード
+                        console.log(`通常モード: ${currentOrientation ? '2ページ表示（横長）' : '1ページ表示（縦長）'}に切り替え`);
+
+                        try {
+                            Module.ccall('setSinglePageMode', null, ['boolean'], [singlePage]);
+                        } catch (e) {
+                            console.error('Error in setSinglePageMode:', e);
+                        }
+
+                        previousOrientation = currentOrientation;
+                    } else if (Module.ccall) {
+                        // 画面の向きが変わっていない場合は再描画のみ
                         try {
                             Module.ccall('refresh', null, [], []);
                         } catch (e) {
