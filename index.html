@@ -126,6 +126,11 @@
             display: block;
         }
 
+        /* 拡大表示時は縦方向もスクロール可能に */
+        #seamless-container.zoomed {
+            overflow-y: auto;
+        }
+
         #seamless-scroll {
             display: flex;
             height: 100%;
@@ -152,6 +157,11 @@
 
         #vertical-container.active {
             display: block;
+        }
+
+        /* 拡大表示時は横方向もスクロール可能に */
+        #vertical-container.zoomed {
+            overflow-x: auto;
         }
 
         #vertical-scroll {
@@ -248,6 +258,7 @@
         <div id="nav-bar">
             <button class="nav-bar-button" onclick="toggleViewMode()">シームレス表示</button>
             <button id="direction-button" class="nav-bar-button" onclick="toggleDirection()" style="display: none;">縦読み</button>
+            <button id="zoom-button" class="nav-bar-button" onclick="toggleZoom()" style="display: none;">拡大表示</button>
             <button id="autoplay-button" class="nav-bar-button" onclick="toggleAutoplay()" style="display: none;">自動再生</button>
             <button class="nav-bar-button" onclick="toggleFullscreen()">全画面</button>
         </div>
@@ -364,19 +375,37 @@
                 return;
             }
 
-            // 画像のアスペクト比に基づいてCanvasの幅を調整
-            const imageAspect = imgWidth / imgHeight;
-            const canvasHeight = window.innerHeight;
-            const optimalWidth = Math.floor(canvasHeight * imageAspect);
+            // 拡大表示の倍率を適用
+            const scale = zoomEnabled ? ZOOM_SCALE : 1;
+
+            // 縦読みモードか横読みモードかを判定
+            const isVerticalMode = canvasId.includes('vertical');
+
+            let optimalWidth, canvasHeight;
+
+            if (isVerticalMode) {
+                // 縦読みモード：画面幅を基準にサイズを計算
+                const imageAspect = imgWidth / imgHeight;
+                const canvasWidth = window.innerWidth * scale;
+                const optimalHeight = Math.floor(canvasWidth / imageAspect);
+
+                optimalWidth = canvasWidth;
+                canvasHeight = optimalHeight;
+            } else {
+                // 横読みモード：画面高さを基準にサイズを計算
+                const imageAspect = imgWidth / imgHeight;
+                canvasHeight = window.innerHeight * scale;
+                optimalWidth = Math.floor(canvasHeight * imageAspect);
+            }
 
             // Canvasのサイズを画像に合わせて調整
             canvas.width = optimalWidth;
             canvas.height = canvasHeight;
             canvas.style.width = optimalWidth + 'px';
-            canvas.style.height = '100vh';
+            canvas.style.height = canvasHeight + 'px';
 
-            console.log(`Canvas ${canvasId} adjusted to: ${optimalWidth}x${canvasHeight}`);
-            console.log(`Image size: ${imgWidth}x${imgHeight}, aspect: ${imageAspect}`);
+            console.log(`Canvas ${canvasId} adjusted to: ${optimalWidth}x${canvasHeight}, scale: ${scale}, mode: ${isVerticalMode ? 'vertical' : 'horizontal'}`);
+            console.log(`Image size: ${imgWidth}x${imgHeight}`);
 
             // 画像を画面いっぱいに描画（アスペクト比維持）
             const displayWidth = optimalWidth;
@@ -428,6 +457,10 @@
         const AUTOPLAY_SPEED = 4; // 1フレームあたりのスクロール量（ピクセル）
         const AUTOPLAY_FPS = 30; // フレームレート
 
+        // 拡大表示の管理
+        let zoomEnabled = false;
+        const ZOOM_SCALE = 2; // 拡大倍率
+
         // 画面が横長かどうかを判定
         function isLandscape() {
             return window.innerWidth > window.innerHeight;
@@ -444,8 +477,9 @@
                 document.getElementById('normal-mode-content').style.display = 'none';
                 document.querySelector('.nav-bar-button').textContent = '見開き表示';
 
-                // 方向切り替えボタンと自動再生ボタンを表示
+                // 方向切り替えボタン、拡大表示ボタン、自動再生ボタンを表示
                 document.getElementById('direction-button').style.display = 'block';
+                document.getElementById('zoom-button').style.display = 'block';
                 document.getElementById('autoplay-button').style.display = 'block';
 
                 // 画面の向きに応じて初期化
@@ -472,11 +506,15 @@
                 document.getElementById('normal-mode-content').style.display = 'block';
                 document.querySelector('.nav-bar-button').textContent = 'シームレス表示';
 
-                // 自動再生を停止して非表示
+                // 自動再生と拡大表示を停止して非表示
                 if (autoplayEnabled) {
                     toggleAutoplay();
                 }
+                if (zoomEnabled) {
+                    toggleZoom();
+                }
                 document.getElementById('direction-button').style.display = 'none';
+                document.getElementById('zoom-button').style.display = 'none';
                 document.getElementById('autoplay-button').style.display = 'none';
 
                 // 通常モードを再描画
@@ -571,18 +609,25 @@
         }
 
         // ドラッグでスクロールする機能（右から左へのスクロール）
-        let isDragging = false;
-        let startX = 0;
-        let scrollLeft = 0;
-        let autoplayPausedByDrag = false;
-
         function setupDragScroll(container) {
+            let isDragging = false;
+            let startX = 0;
+            let startY = 0;
+            let scrollLeft = 0;
+            let scrollTop = 0;
+            let autoplayPausedByDrag = false;
+
             container.addEventListener('mousedown', (e) => {
                 isDragging = true;
                 startX = e.pageX - container.offsetLeft;
+                startY = e.pageY - container.offsetTop;
                 scrollLeft = container.scrollLeft;
+                scrollTop = container.scrollTop;
                 container.style.cursor = 'grabbing';
                 container.style.userSelect = 'none';
+                container.style.scrollBehavior = 'auto'; // ドラッグ中はsmoothを無効化
+
+                console.log(`[Horizontal] Drag start - scrollLeft: ${scrollLeft}, scrollTop: ${scrollTop}, zoomEnabled: ${zoomEnabled}`);
 
                 // 自動再生中の場合は一時停止
                 if (autoplayEnabled) {
@@ -597,11 +642,13 @@
             container.addEventListener('mouseleave', () => {
                 isDragging = false;
                 container.style.cursor = 'grab';
+                container.style.scrollBehavior = 'smooth'; // smoothに戻す
             });
 
             container.addEventListener('mouseup', () => {
                 isDragging = false;
                 container.style.cursor = 'grab';
+                container.style.scrollBehavior = 'smooth'; // smoothに戻す
 
                 // ドラッグで一時停止していた場合は再開
                 if (autoplayPausedByDrag && autoplayEnabled) {
@@ -614,16 +661,30 @@
                 if (!isDragging) return;
                 e.preventDefault();
                 const x = e.pageX - container.offsetLeft;
-                const walk = (x - startX) * 2; // スクロール速度を調整
+                const y = e.pageY - container.offsetTop;
+                const walkX = (x - startX) * 2; // スクロール速度を調整
+                const walkY = (y - startY) * 2;
+
                 // 左にドラッグでページが増える、右にドラッグでページが減る
-                container.scrollLeft = scrollLeft - walk;
+                const newScrollLeft = scrollLeft - walkX;
+                container.scrollLeft = newScrollLeft;
+                console.log(`[Horizontal] Setting scrollLeft to ${newScrollLeft} (original: ${scrollLeft}, walkX: ${walkX})`);
+
+                // 拡大表示時は縦方向にもスクロール
+                if (zoomEnabled) {
+                    const newScrollTop = scrollTop - walkY;
+                    container.scrollTop = newScrollTop;
+                    console.log(`[Horizontal] Setting scrollTop to ${newScrollTop} (original: ${scrollTop}, walkY: ${walkY})`);
+                }
             });
 
             // タッチイベント（モバイル対応）
             container.addEventListener('touchstart', (e) => {
                 isDragging = true;
                 startX = e.touches[0].pageX - container.offsetLeft;
+                startY = e.touches[0].pageY - container.offsetTop;
                 scrollLeft = container.scrollLeft;
+                scrollTop = container.scrollTop;
 
                 // 自動再生中の場合は一時停止
                 if (autoplayEnabled) {
@@ -648,9 +709,17 @@
             container.addEventListener('touchmove', (e) => {
                 if (!isDragging) return;
                 const x = e.touches[0].pageX - container.offsetLeft;
-                const walk = (x - startX) * 2;
+                const y = e.touches[0].pageY - container.offsetTop;
+                const walkX = (x - startX) * 2;
+                const walkY = (y - startY) * 2;
+
                 // 左にドラッグでページが増える、右にドラッグでページが減る
-                container.scrollLeft = scrollLeft - walk;
+                container.scrollLeft = scrollLeft - walkX;
+
+                // 拡大表示時は縦方向にもスクロール
+                if (zoomEnabled) {
+                    container.scrollTop = scrollTop - walkY;
+                }
             });
 
             // カーソルスタイルを設定
@@ -672,17 +741,19 @@
             canvas.dataset.loaded = 'false';
 
             // 一般的なマンガのアスペクト比（2:3）で初期サイズを設定
-            const canvasHeight = window.innerHeight;
+            // 拡大表示が有効な場合は2倍のサイズ
+            const scale = zoomEnabled ? ZOOM_SCALE : 1;
+            const canvasHeight = window.innerHeight * scale;
             const canvasWidth = Math.floor(canvasHeight * (2 / 3));
 
             canvas.width = canvasWidth;
             canvas.height = canvasHeight;
             canvas.style.width = canvasWidth + 'px';
-            canvas.style.height = '100vh';
+            canvas.style.height = canvasHeight + 'px';
 
             seamlessPages.push(pageNum);
 
-            console.log(`Created horizontal canvas for page ${pageNum}, size: ${canvas.width}x${canvas.height}`);
+            console.log(`Created horizontal canvas for page ${pageNum}, size: ${canvas.width}x${canvas.height}, scale: ${scale}`);
 
             return canvas;
         }
@@ -702,17 +773,19 @@
             canvas.dataset.loaded = 'false';
 
             // 一般的なマンガのアスペクト比（2:3）で初期サイズを設定
-            const canvasWidth = window.innerWidth;
+            // 拡大表示が有効な場合は2倍のサイズ
+            const scale = zoomEnabled ? ZOOM_SCALE : 1;
+            const canvasWidth = window.innerWidth * scale;
             const canvasHeight = Math.floor(canvasWidth * (3 / 2));
 
             canvas.width = canvasWidth;
             canvas.height = canvasHeight;
-            canvas.style.width = '100vw';
+            canvas.style.width = canvasWidth + 'px';
             canvas.style.height = canvasHeight + 'px';
 
             verticalPages.push(pageNum);
 
-            console.log(`Created vertical canvas for page ${pageNum}, size: ${canvas.width}x${canvas.height}`);
+            console.log(`Created vertical canvas for page ${pageNum}, size: ${canvas.width}x${canvas.height}, scale: ${scale}`);
 
             return canvas;
         }
@@ -934,16 +1007,23 @@
         // 縦ドラッグでスクロールする機能
         function setupVerticalDragScroll(container) {
             let isDragging = false;
+            let startX = 0;
             let startY = 0;
+            let scrollLeft = 0;
             let scrollTop = 0;
             let autoplayPausedByDrag = false;
 
             container.addEventListener('mousedown', (e) => {
                 isDragging = true;
+                startX = e.pageX - container.offsetLeft;
                 startY = e.pageY - container.offsetTop;
+                scrollLeft = container.scrollLeft;
                 scrollTop = container.scrollTop;
                 container.style.cursor = 'grabbing';
                 container.style.userSelect = 'none';
+                container.style.scrollBehavior = 'auto'; // ドラッグ中はsmoothを無効化
+
+                console.log(`[Vertical] Drag start - scrollLeft: ${scrollLeft}, scrollTop: ${scrollTop}, zoomEnabled: ${zoomEnabled}`);
 
                 // 自動再生中の場合は一時停止
                 if (autoplayEnabled) {
@@ -958,11 +1038,13 @@
             container.addEventListener('mouseleave', () => {
                 isDragging = false;
                 container.style.cursor = 'grab';
+                container.style.scrollBehavior = 'smooth'; // smoothに戻す
             });
 
             container.addEventListener('mouseup', () => {
                 isDragging = false;
                 container.style.cursor = 'grab';
+                container.style.scrollBehavior = 'smooth'; // smoothに戻す
 
                 // ドラッグで一時停止していた場合は再開
                 if (autoplayPausedByDrag && autoplayEnabled) {
@@ -974,16 +1056,31 @@
             container.addEventListener('mousemove', (e) => {
                 if (!isDragging) return;
                 e.preventDefault();
+                const x = e.pageX - container.offsetLeft;
                 const y = e.pageY - container.offsetTop;
-                const walk = (y - startY) * 2; // スクロール速度を調整
-                container.scrollTop = scrollTop - walk;
+                const walkX = (x - startX) * 2; // スクロール速度を調整
+                const walkY = (y - startY) * 2;
+
+                const newScrollTop = scrollTop - walkY;
+                container.scrollTop = newScrollTop;
+                console.log(`[Vertical] Setting scrollTop to ${newScrollTop} (original: ${scrollTop}, walkY: ${walkY})`);
+
+                // 拡大表示時は横方向にもスクロール
+                if (zoomEnabled) {
+                    const newScrollLeft = scrollLeft - walkX;
+                    container.scrollLeft = newScrollLeft;
+                    console.log(`[Vertical] Setting scrollLeft to ${newScrollLeft} (original: ${scrollLeft}, walkX: ${walkX})`);
+                }
             });
 
             // タッチイベント（モバイル対応）
             container.addEventListener('touchstart', (e) => {
                 isDragging = true;
+                startX = e.touches[0].pageX - container.offsetLeft;
                 startY = e.touches[0].pageY - container.offsetTop;
+                scrollLeft = container.scrollLeft;
                 scrollTop = container.scrollTop;
+                container.style.scrollBehavior = 'auto'; // ドラッグ中はsmoothを無効化
 
                 // 自動再生中の場合は一時停止
                 if (autoplayEnabled) {
@@ -997,6 +1094,7 @@
 
             container.addEventListener('touchend', () => {
                 isDragging = false;
+                container.style.scrollBehavior = 'smooth'; // smoothに戻す
 
                 // ドラッグで一時停止していた場合は再開
                 if (autoplayPausedByDrag && autoplayEnabled) {
@@ -1007,9 +1105,19 @@
 
             container.addEventListener('touchmove', (e) => {
                 if (!isDragging) return;
+                const x = e.touches[0].pageX - container.offsetLeft;
                 const y = e.touches[0].pageY - container.offsetTop;
-                const walk = (y - startY) * 2;
-                container.scrollTop = scrollTop - walk;
+                const walkX = (x - startX) * 2;
+                const walkY = (y - startY) * 2;
+
+                const newScrollTop = scrollTop - walkY;
+                container.scrollTop = newScrollTop;
+
+                // 拡大表示時は横方向にもスクロール
+                if (zoomEnabled) {
+                    const newScrollLeft = scrollLeft - walkX;
+                    container.scrollLeft = newScrollLeft;
+                }
             });
 
             // カーソルスタイルを設定
@@ -1093,6 +1201,123 @@
                     toggleAutoplay();
                 }
             }, 1000 / AUTOPLAY_FPS);
+        }
+
+        // 拡大表示の切り替え
+        function toggleZoom() {
+            const button = document.getElementById('zoom-button');
+            const seamlessContainer = document.getElementById('seamless-container');
+            const verticalContainer = document.getElementById('vertical-container');
+
+            if (!zoomEnabled) {
+                // 拡大表示を有効化
+                zoomEnabled = true;
+                button.textContent = '標準表示';
+                button.style.backgroundColor = 'rgba(100, 150, 255, 0.3)';
+
+                // zoomedクラスを追加
+                seamlessContainer.classList.add('zoomed');
+                verticalContainer.classList.add('zoomed');
+
+                console.log('拡大表示を有効化しました');
+            } else {
+                // 拡大表示を無効化
+                zoomEnabled = false;
+                button.textContent = '拡大表示';
+                button.style.backgroundColor = '';
+
+                // zoomedクラスを削除
+                seamlessContainer.classList.remove('zoomed');
+                verticalContainer.classList.remove('zoomed');
+
+                console.log('標準表示に戻しました');
+            }
+
+            // 現在のモードに応じて再描画
+            if (seamlessDirection === 'horizontal') {
+                // 横読みモードの場合：全Canvasをクリアして再作成
+                const scrollContainer = document.getElementById('seamless-scroll');
+                const currentScrollLeft = document.getElementById('seamless-container').scrollLeft;
+
+                // すべてのページの読み込み状態をリセット
+                seamlessPages.forEach(pageNum => {
+                    const canvas = document.getElementById(`page-canvas-${pageNum}`);
+                    if (canvas) {
+                        canvas.dataset.loaded = 'false';
+                    }
+                });
+
+                // Canvasのサイズを再計算して再描画
+                recreateHorizontalCanvases();
+
+                // スクロール位置を調整（拡大率に応じて）
+                setTimeout(() => {
+                    const container = document.getElementById('seamless-container');
+                    container.scrollLeft = currentScrollLeft * (zoomEnabled ? ZOOM_SCALE : (1 / ZOOM_SCALE));
+                    renderVisiblePages();
+                }, 100);
+            } else {
+                // 縦読みモードの場合：全Canvasをクリアして再作成
+                const currentScrollTop = document.getElementById('vertical-container').scrollTop;
+
+                // すべてのページの読み込み状態をリセット
+                verticalPages.forEach(pageNum => {
+                    const canvas = document.getElementById(`vertical-canvas-${pageNum}`);
+                    if (canvas) {
+                        canvas.dataset.loaded = 'false';
+                    }
+                });
+
+                // Canvasのサイズを再計算して再描画
+                recreateVerticalCanvases();
+
+                // スクロール位置を調整
+                setTimeout(() => {
+                    const container = document.getElementById('vertical-container');
+                    container.scrollTop = currentScrollTop * (zoomEnabled ? ZOOM_SCALE : (1 / ZOOM_SCALE));
+                    renderVerticalVisiblePages();
+                }, 100);
+            }
+        }
+
+        // 横読みモードのCanvasを再作成
+        function recreateHorizontalCanvases() {
+            const pages = [...seamlessPages];
+            pages.forEach(pageNum => {
+                const canvas = document.getElementById(`page-canvas-${pageNum}`);
+                if (canvas) {
+                    // Canvasのサイズを再計算
+                    const scale = zoomEnabled ? ZOOM_SCALE : 1;
+                    const canvasHeight = window.innerHeight * scale;
+                    const canvasWidth = Math.floor(canvasHeight * (2 / 3));
+
+                    canvas.width = canvasWidth;
+                    canvas.height = canvasHeight;
+                    canvas.style.width = canvasWidth + 'px';
+                    canvas.style.height = canvasHeight + 'px';
+                    canvas.dataset.loaded = 'false';
+                }
+            });
+        }
+
+        // 縦読みモードのCanvasを再作成
+        function recreateVerticalCanvases() {
+            const pages = [...verticalPages];
+            pages.forEach(pageNum => {
+                const canvas = document.getElementById(`vertical-canvas-${pageNum}`);
+                if (canvas) {
+                    // Canvasのサイズを再計算
+                    const scale = zoomEnabled ? ZOOM_SCALE : 1;
+                    const canvasWidth = window.innerWidth * scale;
+                    const canvasHeight = Math.floor(canvasWidth * (3 / 2));
+
+                    canvas.width = canvasWidth;
+                    canvas.height = canvasHeight;
+                    canvas.style.width = canvasWidth + 'px';
+                    canvas.style.height = canvasHeight + 'px';
+                    canvas.dataset.loaded = 'false';
+                }
+            });
         }
 
         // 全画面表示の切り替え
