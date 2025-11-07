@@ -27,6 +27,10 @@
             width: 100%;
             height: 100%;
             object-fit: contain;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
         }
 
         .nav-button {
@@ -147,6 +151,10 @@
             height: 100vh;
             flex-shrink: 0;
             background-color: #111;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
         }
 
         /* 縦読みモード用のスタイル */
@@ -182,6 +190,10 @@
             width: 100vw;
             flex-shrink: 0;
             background-color: #111;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
         }
 
         /* 通常モードのコンテナ */
@@ -1543,6 +1555,18 @@
             } else if (e.key === 'c' || e.key === 'C') {
                 showCacheStatus();
             }
+        });
+
+        // 右クリックメニューを無効化（画像保存を防ぐ）
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            return false;
+        });
+
+        // ドラッグによる画像保存を防ぐ
+        document.addEventListener('dragstart', function(e) {
+            e.preventDefault();
+            return false;
         });
 
         // スクリプトロードのエラーハンドリング
