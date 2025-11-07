@@ -9,7 +9,7 @@ cd "$(dirname "$0")"
 echo "Building mukuviewer..."
 
 # コンパイル
-emcc src/main.cpp \
+emcc src/main.cpp src/cipher.cpp \
     -o build/mukuviewer.js \
     -s WASM=1 \
     -s FETCH=1 \

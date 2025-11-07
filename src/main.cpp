@@ -12,6 +12,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+int invCipher( uint8_t* data, int size );
+
 // 画像データ構造
 struct ImageData {
     std::vector<unsigned char> data;
@@ -94,7 +96,7 @@ public:
 
         // 画像URLの構築
         char url[256];
-        snprintf(url, sizeof(url), "https://mvtest.ci-labo.net/images/%s/%d.jpg", bookId.c_str(), pageNum);
+        snprintf(url, sizeof(url), "https://mvtest.ci-labo.net/images/%s/%d.jpg.enc", bookId.c_str(), pageNum);
 
         printf("Fetching: %s\n", url);
 
@@ -135,9 +137,13 @@ public:
 
         // 画像をデコード
         int width, height, channels;
+
+        int size;
+        size = invCipher( (uint8_t *)fetch->data, fetch->numBytes );
+
         unsigned char* imageData = stbi_load_from_memory(
             (unsigned char*)fetch->data,
-            fetch->numBytes,
+            size,
             &width,
             &height,
             &channels,

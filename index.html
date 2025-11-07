@@ -1466,27 +1466,40 @@
             }
         });
 
-        // 画面下部のクリック/タップで表示
+        // 画面上のクリックで表示（見開きモード時は左右ボタン以外）
         document.addEventListener('click', function(e) {
-            const windowHeight = window.innerHeight;
-            const clickY = e.clientY;
+            // 見開きモード時は左右のページ移動ボタンをクリックした場合は表示しない
+            if (viewMode === 'normal') {
+                const nextButton = document.getElementById('next-button');
+                const prevButton = document.getElementById('prev-button');
 
-            // 画面下部がクリックされたら表示
-            if (clickY > windowHeight - NAV_BAR_ZONE_HEIGHT) {
-                showNavBar();
+                // クリックされた要素がページ移動ボタンかどうか確認
+                if (e.target === nextButton || e.target === prevButton) {
+                    return; // ボタンがクリックされた場合は何もしない
+                }
             }
+
+            // それ以外の場所がクリックされたら表示
+            showNavBar();
         });
 
         // タッチイベント（モバイル対応）
         document.addEventListener('touchstart', function(e) {
-            const windowHeight = window.innerHeight;
-            const touch = e.touches[0];
-            const touchY = touch.clientY;
+            // 見開きモード時は左右のページ移動ボタンをタップした場合は表示しない
+            if (viewMode === 'normal') {
+                const nextButton = document.getElementById('next-button');
+                const prevButton = document.getElementById('prev-button');
+                const touch = e.touches[0];
+                const target = document.elementFromPoint(touch.clientX, touch.clientY);
 
-            // 画面下部がタップされたら表示
-            if (touchY > windowHeight - NAV_BAR_ZONE_HEIGHT) {
-                showNavBar();
+                // タップされた要素がページ移動ボタンかどうか確認
+                if (target === nextButton || target === prevButton) {
+                    return; // ボタンがタップされた場合は何もしない
+                }
             }
+
+            // それ以外の場所がタップされたら表示
+            showNavBar();
         });
 
         // ナビゲーションバーにマウスが乗っている間は非表示にしない
