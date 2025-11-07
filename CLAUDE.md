@@ -16,10 +16,12 @@ https://mvtest.ci-labo.net/index.html?book_id=[コミックID]
 
 ### 画像URL形式
 ```
-https://mvtest.ci-labo.net/images/[コミックID]/[ページ番号].jpg
+https://mvtest.ci-labo.net/images/[コミックID]/[ページ番号].jpg.enc
 ```
 - ページ番号は1から始まる
 - 最大209ページ（テスト環境）
+- 画像はAES-128で暗号化されており、`.enc`拡張子で提供される
+- ダウンロード後、C++側で自動的に復号化される
 
 ### 表示方式
 
@@ -48,6 +50,10 @@ https://mvtest.ci-labo.net/images/[コミックID]/[ページ番号].jpg
 ### 1. コア機能
 - [x] WebAssemblyベースのビューア
 - [x] JPEG画像の読み込みとデコード（stb_image使用）
+- [x] 暗号化画像の復号化対応（AES-128）
+  - 画像ダウンロード後、自動的に復号化処理を実行
+  - 暗号化キー: `"1234567890123456"`（16バイト固定）
+  - PKCS#7パディング方式を使用
 - [x] 見開き2ページ表示（横長画面）
 - [x] 1ページ表示（縦長画面）
 - [x] 画面の向きに応じた自動切り替え
@@ -160,9 +166,10 @@ https://mvtest.ci-labo.net/images/[コミックID]/[ページ番号].jpg
 │   └── mukuviewer.wasm     # コンパイル済みバイナリ (120KB)
 ├── src/
 │   ├── main.cpp            # メインのC++ソースコード
+│   ├── cipher.cpp          # AES-128暗号化/復号化ライブラリ
 │   └── stb_image.h         # 画像デコードライブラリ
 ├── images/
-│   └── 00000001/           # テスト用画像 (1.jpg～209.jpg)
+│   └── 00000001/           # テスト用画像 (1.jpg.enc～209.jpg.enc)
 ├── public/
 │   └── images/
 │       └── mukuviewer.png  # ロゴ画像（スプラッシュ画面用）
@@ -180,6 +187,30 @@ bool singlePageMode;                 // true: 1ページ表示, false: 2ペー�
 static const int PRELOAD_PAGES = 20;  // 先読みするページ数
 const int maxPages = 209;             // 最大ページ数
 ```
+
+### 暗号化/復号化システム（C++ - cipher.cpp）
+```cpp
+// AES-128暗号化/復号化の実装
+uint8_t crypt_key[] = "1234567890123456";  // 16バイト固定キー
+
+// 復号化関数（main.cppから呼び出される）
+int invCipher(uint8_t* data, int size);
+
+// 主要なAES-128関数
+void invCipher16(uint8_t* data, uint8_t* key);  // 16バイトブロック復号化
+void KeyExpansion(uint8_t *key);                // 鍵スケジュール
+void invSubBytes(uint8_t* src);                 // S-Box逆変換
+void invShiftRows(uint8_t* src);                // 行シフト逆変換
+void invMixColumns(uint8_t* src);               // 列混合逆変換
+void AddRoundKey(uint8_t* src, uint8_t nRound); // ラウンドキー加算
+```
+
+**実装の特徴**:
+- AES-128アルゴリズム（128ビット鍵、10ラウンド）
+- PKCS#7パディング方式を使用
+- 16バイト（128ビット）ブロック暗号
+- 暗号化されたデータは、復号化後に元のJPEG形式に戻る
+- 復号化はダウンロード直後、画像デコード前に実行される（src/main.cpp:141-142）
 
 ### 画面の向き判定（JavaScript）
 ```javascript
@@ -202,11 +233,12 @@ window.addEventListener('resize', function() {
 ```
 
 ### 画像デコードフロー
-1. `emscripten_fetch` で画像をダウンロード
-2. `stbi_load_from_memory` でJPEGをRGBAにデコード
-3. C++の`std::vector`にデータ保存
-4. JavaScript側で`ImageData`オブジェクトに変換
-5. Canvasに描画
+1. `emscripten_fetch` で暗号化画像（.jpg.enc）をダウンロード
+2. `invCipher()` でAES-128復号化を実行してJPEGデータを取得
+3. `stbi_load_from_memory` でJPEGをRGBAにデコード
+4. C++の`std::vector`にデータ保存
+5. JavaScript側で`ImageData`オブジェクトに変換
+6. Canvasに描画
 
 ### 描画最適化
 
@@ -347,7 +379,8 @@ Module.ccall('renderSinglePage', null, ['number', 'string'], [1, 'page-canvas-1'
 [WASM] Initialized viewer with book_id: 00000001
 [WASM] Single page mode: OFF
 [WASM] Loading pages 1 and 2
-[WASM] Fetching: https://mvtest.ci-labo.net/images/00000001/1.jpg
+[WASM] Fetching: https://mvtest.ci-labo.net/images/00000001/1.jpg.enc
+[WASM] Fetch success: [暗号化ファイルサイズ] bytes
 [WASM] Image decoded (page 1): 800x1200, channels: 3
 [WASM] Rendering pages 1 and 2...
 [WASM] Preloading pages from 1 to 21
@@ -379,7 +412,8 @@ Created vertical canvas for page 1, size: 1920x2880
 - ImageMagick (テスト画像生成用)
 
 ### ライブラリ
-- stb_image.h (v2.x) - パブリックドメイン
+- stb_image.h (v2.x) - パブリックドメイン（画像デコード用）
+- cipher.cpp - 自作AES-128暗号化/復号化ライブラリ（暗号化画像対応用）
 
 ## メモ
 
@@ -403,11 +437,21 @@ done
 
 ## 最終更新
 
-- **日付**: 2025-11-05
+- **日付**: 2025-11-07
 - **最終ビルド**: mukuviewer.js (36KB), mukuviewer.wasm (121KB)
-- **作業状況**: 縮小表示機能とナビゲーションバー自動表示/非表示機能の実装完了
+- **作業状況**: 暗号化画像の復号化対応完了
 
 ### 本セッションで実装した機能
+1. **暗号化画像の復号化対応**
+   - src/cipher.cppを追加（AES-128暗号化/復号化ライブラリ）
+   - build.shを更新してcipher.cppをコンパイル対象に追加
+   - 画像URLを`.jpg.enc`に変更（暗号化画像を取得）
+   - ダウンロード後に`invCipher()`関数で自動的に復号化
+   - 暗号化アルゴリズム: AES-128（128ビット鍵、10ラウンド、PKCS#7パディング）
+   - 暗号化キー: `"1234567890123456"`（16バイト固定）
+   - 復号化処理はstb_imageによる画像デコードの前に実行される
+
+### 過去のセッションで実装した機能
 1. **縮小表示機能（シームレスモード）**
    - 縮小表示ボタンの追加（シームレス時のみ表示）
    - 3段階の表示倍率に対応（縮小0.5倍、標準1倍、拡大2倍）
