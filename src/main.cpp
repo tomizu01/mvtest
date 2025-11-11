@@ -45,7 +45,7 @@ private:
     bool singlePageMode;  // true: 1ページずつ表示, false: 2ページ表示
 
 public:
-    ComicViewer() : bookId("00000001"), currentPage(1), maxPages(209),
+    ComicViewer() : bookId("00000001"), currentPage(1), maxPages(20),
                     canvasTarget("#viewer-canvas"), singlePageMode(false) {}
 
     void initialize(const std::string& book_id) {
