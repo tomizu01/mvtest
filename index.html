@@ -432,6 +432,79 @@
         #autoplay-button-fixed.playing .play-stop {
             display: inline-block;
         }
+
+        /* モード切り替えボタン（見開き/シームレス） */
+        #mode-switch-container {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #ffffff;
+            border-radius: 25px;
+            padding: 8px;
+            display: flex;
+            gap: 4px;
+            z-index: 20;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .mode-switch-button {
+            background: none;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+
+        .mode-switch-button img {
+            display: block;
+            height: 40px;
+            width: auto;
+        }
+
+        .mode-switch-button:hover:not(.inactive) {
+            opacity: 0.8;
+        }
+
+        .mode-switch-button:active:not(.inactive) {
+            transform: scale(0.95);
+        }
+
+        .mode-switch-button.inactive {
+            cursor: default;
+            opacity: 0.6;
+        }
+
+        /* 全画面表示ボタン（右下固定） */
+        #fullscreen-button-fixed {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: none;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            z-index: 20;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+
+        #fullscreen-button-fixed:hover {
+            opacity: 0.8;
+        }
+
+        #fullscreen-button-fixed:active {
+            transform: scale(0.95);
+        }
+
+        #fullscreen-button-fixed img {
+            display: block;
+            height: 40px;
+            width: auto;
+        }
+
+        /* モード切り替えボタンを全画面ボタンの左に配置 */
+        #mode-switch-container {
+            right: 150px; /* 全画面ボタン(幅約40px) + 余白(100px) */
+        }
     </style>
 </head>
 <body>
@@ -461,9 +534,7 @@
         </div>
 
         <!-- ナビゲーションバー -->
-        <div id="nav-bar">
-            <button class="nav-bar-button" onclick="toggleViewMode()">シームレス表示</button>
-            <button class="nav-bar-button" onclick="toggleFullscreen()">全画面</button>
+        <div id="nav-bar" style="display: none;">
         </div>
 
         <!-- 自動再生ボタン（左下固定） -->
@@ -471,6 +542,21 @@
             <img class="play-start" src="public/images/play_start.png" alt="">
             <img class="play-stop" src="public/images/play_stop.png" alt="">
             <span>自動再生</span>
+        </button>
+
+        <!-- モード切り替えボタン（全画面ボタンの左） -->
+        <div id="mode-switch-container">
+            <button id="seamless-mode-button" class="mode-switch-button" onclick="switchToSeamlessMode()">
+                <img id="seamless-mode-icon" src="public/images/button_seamless_off.png" alt="シームレス表示">
+            </button>
+            <button id="normal-mode-button" class="mode-switch-button inactive">
+                <img id="normal-mode-icon" src="public/images/button_mihiraki_on.png" alt="見開き表示">
+            </button>
+        </div>
+
+        <!-- 全画面表示ボタン（右下固定） -->
+        <button id="fullscreen-button-fixed" onclick="toggleFullscreen()">
+            <img id="fullscreen-icon" src="public/images/fullscreen.png" alt="全画面">
         </button>
 
         <!-- サブメニューオープンボタン -->
@@ -824,67 +910,108 @@
             }
         }
 
-        // モード切り替え
-        function toggleViewMode() {
-            if (viewMode === 'normal') {
-                // シームレスモードに切り替え（画面サイズに応じて初期モードを決定）
-                const landscape = isLandscape();
-                seamlessDirection = landscape ? 'horizontal' : 'vertical';
-                viewMode = landscape ? 'seamless-horizontal' : 'seamless-vertical';
+        // シームレスモードに切り替え
+        function switchToSeamlessMode() {
+            if (viewMode !== 'normal') {
+                return; // 既にシームレスモードの場合は何もしない
+            }
 
-                document.getElementById('normal-mode-content').style.display = 'none';
-                document.querySelector('.nav-bar-button').textContent = '見開き表示';
+            // シームレスモードに切り替え（画面サイズに応じて初期モードを決定）
+            const landscape = isLandscape();
+            seamlessDirection = landscape ? 'horizontal' : 'vertical';
+            viewMode = landscape ? 'seamless-horizontal' : 'seamless-vertical';
 
-                // 自動再生ボタンを表示（左下固定）
-                document.getElementById('autoplay-button-fixed').classList.add('visible');
+            document.getElementById('normal-mode-content').style.display = 'none';
 
-                // サブメニューボタンを表示
-                updateSubmenuVisibility();
+            // 自動再生ボタンを表示（左下固定）
+            document.getElementById('autoplay-button-fixed').classList.add('visible');
 
-                // 画面の向きに応じて初期化
-                if (landscape) {
-                    // 横長 → 横読みモード
-                    document.getElementById('seamless-container').classList.add('active');
-                    document.getElementById('vertical-container').classList.remove('active');
-                    initSeamlessMode();
-                    console.log('画面が横長のため、横読みモードで開始');
-                } else {
-                    // 縦長 → 縦読みモード
-                    document.getElementById('seamless-container').classList.remove('active');
-                    document.getElementById('vertical-container').classList.add('active');
-                    initVerticalMode();
-                    console.log('画面が縦長のため、縦読みモードで開始');
-                }
+            // サブメニューボタンを表示
+            updateSubmenuVisibility();
 
-                // 読み方向ボタンの状態を更新
-                updateDirectionButtons();
-            } else {
-                // 通常モードに切り替え
-                viewMode = 'normal';
-                document.getElementById('seamless-container').classList.remove('active');
+            // 画面の向きに応じて初期化
+            if (landscape) {
+                // 横長 → 横読みモード
+                document.getElementById('seamless-container').classList.add('active');
                 document.getElementById('vertical-container').classList.remove('active');
-                document.getElementById('normal-mode-content').style.display = 'block';
-                document.querySelector('.nav-bar-button').textContent = 'シームレス表示';
+                initSeamlessMode();
+                console.log('画面が横長のため、横読みモードで開始');
+            } else {
+                // 縦長 → 縦読みモード
+                document.getElementById('seamless-container').classList.remove('active');
+                document.getElementById('vertical-container').classList.add('active');
+                initVerticalMode();
+                console.log('画面が縦長のため、縦読みモードで開始');
+            }
 
-                // 自動再生を停止して非表示
-                if (autoplayEnabled) {
-                    toggleAutoplay();
-                }
-                // ズームレベルを標準に戻す
-                if (zoomLevel !== 1) {
-                    setZoomLevel(1);
-                }
+            // 読み方向ボタンの状態を更新
+            updateDirectionButtons();
 
-                // 自動再生ボタンを非表示
-                document.getElementById('autoplay-button-fixed').classList.remove('visible');
+            // モード切り替えボタンの状態を更新
+            updateModeSwitchButtons();
+        }
 
-                // サブメニューボタンを非表示
-                updateSubmenuVisibility();
+        // 見開きモードに切り替え
+        function switchToNormalMode() {
+            if (viewMode === 'normal') {
+                return; // 既に見開きモードの場合は何もしない
+            }
 
-                // 通常モードを再描画
-                if (Module.ccall) {
-                    Module.ccall('refresh', null, [], []);
-                }
+            // 通常モードに切り替え
+            viewMode = 'normal';
+            document.getElementById('seamless-container').classList.remove('active');
+            document.getElementById('vertical-container').classList.remove('active');
+            document.getElementById('normal-mode-content').style.display = 'block';
+
+            // 自動再生を停止して非表示
+            if (autoplayEnabled) {
+                toggleAutoplay();
+            }
+            // ズームレベルを標準に戻す
+            if (zoomLevel !== 1) {
+                setZoomLevel(1);
+            }
+
+            // 自動再生ボタンを非表示
+            document.getElementById('autoplay-button-fixed').classList.remove('visible');
+
+            // サブメニューボタンを非表示
+            updateSubmenuVisibility();
+
+            // 通常モードを再描画
+            if (Module.ccall) {
+                Module.ccall('refresh', null, [], []);
+            }
+
+            // モード切り替えボタンの状態を更新
+            updateModeSwitchButtons();
+        }
+
+        // モード切り替えボタンの状態を更新
+        function updateModeSwitchButtons() {
+            const seamlessButton = document.getElementById('seamless-mode-button');
+            const normalButton = document.getElementById('normal-mode-button');
+            const seamlessIcon = document.getElementById('seamless-mode-icon');
+            const normalIcon = document.getElementById('normal-mode-icon');
+
+            if (viewMode === 'normal') {
+                // 見開きモード時
+                seamlessButton.classList.remove('inactive');
+                seamlessButton.onclick = switchToSeamlessMode;
+                seamlessIcon.src = 'public/images/button_seamless_off.png'; // active（押せる）
+
+                normalButton.classList.add('inactive');
+                normalButton.onclick = null;
+                normalIcon.src = 'public/images/button_mihiraki_on.png'; // inactive（押せない）
+            } else {
+                // シームレスモード時
+                seamlessButton.classList.add('inactive');
+                seamlessButton.onclick = null;
+                seamlessIcon.src = 'public/images/button_seamless_on.png'; // inactive（押せない）
+
+                normalButton.classList.remove('inactive');
+                normalButton.onclick = switchToNormalMode;
+                normalIcon.src = 'public/images/button_mihiraki_off.png'; // active（押せる）
             }
         }
 
@@ -1667,7 +1794,7 @@
         function toggleFullscreen() {
             const container = document.getElementById('container');
 
-            if (!document.fullscreenElement) {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                 // 全画面モードに入る
                 if (container.requestFullscreen) {
                     container.requestFullscreen().catch(err => {
@@ -1689,6 +1816,18 @@
                 } else if (document.msExitFullscreen) {
                     document.msExitFullscreen();
                 }
+            }
+        }
+
+        // 全画面表示アイコンを更新
+        function updateFullscreenIcon() {
+            const icon = document.getElementById('fullscreen-icon');
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                // 全画面表示中
+                icon.src = 'public/images/fullscreen_cancel.png';
+            } else {
+                // 通常表示
+                icon.src = 'public/images/fullscreen.png';
             }
         }
 
@@ -1806,8 +1945,9 @@
             }, NAV_BAR_HIDE_DELAY);
         });
 
-        // 全画面モードの変化を検知（ログのみ）
+        // 全画面モードの変化を検知してアイコンを更新
         document.addEventListener('fullscreenchange', function() {
+            updateFullscreenIcon();
             if (document.fullscreenElement) {
                 console.log('全画面モードに入りました');
             } else {
@@ -1817,6 +1957,7 @@
 
         // Safari用
         document.addEventListener('webkitfullscreenchange', function() {
+            updateFullscreenIcon();
             if (document.webkitFullscreenElement) {
                 console.log('全画面モードに入りました (webkit)');
             } else {
