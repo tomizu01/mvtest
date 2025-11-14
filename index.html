@@ -258,8 +258,18 @@
             z-index: 30;
             display: none;
             padding: 0;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        #submenu-open-button.visible {
+            display: block;
+        }
+
+        #submenu-open-button.show {
             opacity: 0.8;
-            transition: opacity 0.2s;
+            pointer-events: auto;
         }
 
         #submenu-open-button:hover {
@@ -270,10 +280,6 @@
             width: 100%;
             height: 100%;
             object-fit: contain;
-        }
-
-        #submenu-open-button.visible {
-            display: block;
         }
 
         /* サブメニューポップアップ */
@@ -391,10 +397,21 @@
             cursor: pointer;
             z-index: 20;
             display: none;
-            transition: all 0.2s;
+            opacity: 0;
+            transition: opacity 0.3s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s, transform 0.1s;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
             align-items: center;
             gap: 8px;
+            pointer-events: none;
+        }
+
+        #autoplay-button-fixed.visible {
+            display: flex;
+        }
+
+        #autoplay-button-fixed.show {
+            opacity: 1;
+            pointer-events: auto;
         }
 
         #autoplay-button-fixed:hover {
@@ -405,10 +422,6 @@
 
         #autoplay-button-fixed:active {
             transform: scale(0.98);
-        }
-
-        #autoplay-button-fixed.visible {
-            display: flex;
         }
 
         #autoplay-button-fixed img {
@@ -445,6 +458,14 @@
             gap: 4px;
             z-index: 20;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        #mode-switch-container.show {
+            opacity: 1;
+            pointer-events: auto;
         }
 
         .mode-switch-button {
@@ -484,7 +505,14 @@
             padding: 0;
             cursor: pointer;
             z-index: 20;
-            transition: opacity 0.2s, transform 0.1s;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.1s;
+            pointer-events: none;
+        }
+
+        #fullscreen-button-fixed.show {
+            opacity: 1;
+            pointer-events: auto;
         }
 
         #fullscreen-button-fixed:hover {
@@ -652,6 +680,21 @@
                         const singlePage = !landscape; // 縦長の場合は1ページモード
                         Module.ccall('setSinglePageMode', null, ['boolean'], [singlePage]);
                         console.log(`初期表示モード: ${landscape ? '2ページ（横長）' : '1ページ（縦長）'}`);
+
+                        // モバイルデバイスの場合は全画面ボタンを非表示、モード切り替えボタンを右端に移動
+                        if (isMobileDevice()) {
+                            const fullscreenButton = document.getElementById('fullscreen-button-fixed');
+                            if (fullscreenButton) {
+                                fullscreenButton.style.display = 'none';
+                                console.log('モバイルデバイスのため全画面ボタンを非表示にしました');
+                            }
+
+                            const modeSwitchContainer = document.getElementById('mode-switch-container');
+                            if (modeSwitchContainer) {
+                                modeSwitchContainer.style.right = '30px';
+                                console.log('モバイルデバイスのためモード切り替えボタンを右端に配置しました');
+                            }
+                        }
                     } else {
                         console.error('Module.ccall is not available');
                     }
@@ -809,6 +852,20 @@
             return window.innerWidth > window.innerHeight;
         }
 
+        // モバイルデバイスかどうかを判定
+        function isMobileDevice() {
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+
+            // モバイルデバイスのUser-Agentパターン
+            const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet/i;
+
+            // タッチデバイスかつ小さい画面の場合もモバイルとみなす
+            const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            const isSmallScreen = window.innerWidth <= 1024;
+
+            return mobileRegex.test(userAgent) || (isTouchDevice && isSmallScreen);
+        }
+
         // サブメニューの開閉
         function toggleSubmenu() {
             submenuOpen = !submenuOpen;
@@ -916,6 +973,14 @@
                 return; // 既にシームレスモードの場合は何もしない
             }
 
+            // UI要素のタイマーをリセット
+            clearTimeout(uiControlsTimeout);
+            uiControlsTimeout = setTimeout(() => {
+                if (!isMouseOverUIControls) {
+                    hideUIControls();
+                }
+            }, UI_CONTROLS_HIDE_DELAY);
+
             // シームレスモードに切り替え（画面サイズに応じて初期モードを決定）
             const landscape = isLandscape();
             seamlessDirection = landscape ? 'horizontal' : 'vertical';
@@ -956,6 +1021,14 @@
             if (viewMode === 'normal') {
                 return; // 既に見開きモードの場合は何もしない
             }
+
+            // UI要素のタイマーをリセット
+            clearTimeout(uiControlsTimeout);
+            uiControlsTimeout = setTimeout(() => {
+                if (!isMouseOverUIControls) {
+                    hideUIControls();
+                }
+            }, UI_CONTROLS_HIDE_DELAY);
 
             // 通常モードに切り替え
             viewMode = 'normal';
@@ -1618,6 +1691,14 @@
 
         // 自動再生の切り替え
         function toggleAutoplay() {
+            // UI要素のタイマーをリセット
+            clearTimeout(uiControlsTimeout);
+            uiControlsTimeout = setTimeout(() => {
+                if (!isMouseOverUIControls) {
+                    hideUIControls();
+                }
+            }, UI_CONTROLS_HIDE_DELAY);
+
             const button = document.getElementById('autoplay-button-fixed');
             const textSpan = button.querySelector('span');
 
@@ -1792,6 +1873,14 @@
 
         // 全画面表示の切り替え
         function toggleFullscreen() {
+            // UI要素のタイマーをリセット
+            clearTimeout(uiControlsTimeout);
+            uiControlsTimeout = setTimeout(() => {
+                if (!isMouseOverUIControls) {
+                    hideUIControls();
+                }
+            }, UI_CONTROLS_HIDE_DELAY);
+
             const container = document.getElementById('container');
 
             if (!document.fullscreenElement && !document.webkitFullscreenElement) {
@@ -1828,6 +1917,59 @@
             } else {
                 // 通常表示
                 icon.src = 'public/images/fullscreen.png';
+            }
+        }
+
+        // UI要素の自動表示/非表示管理
+        let uiControlsTimeout;
+        let isMouseOverUIControls = false;
+        const UI_CONTROLS_HIDE_DELAY = 3000; // 3秒後に自動で非表示
+
+        // UI要素を表示する関数
+        function showUIControls() {
+            const submenuButton = document.getElementById('submenu-open-button');
+            const autoplayButton = document.getElementById('autoplay-button-fixed');
+            const modeSwitchContainer = document.getElementById('mode-switch-container');
+            const fullscreenButton = document.getElementById('fullscreen-button-fixed');
+
+            // 表示するUI要素にshowクラスを追加
+            if (viewMode !== 'normal' && submenuButton.classList.contains('visible')) {
+                submenuButton.classList.add('show');
+            }
+
+            if (viewMode !== 'normal' && autoplayButton.classList.contains('visible')) {
+                autoplayButton.classList.add('show');
+            }
+
+            modeSwitchContainer.classList.add('show');
+
+            if (!isMobileDevice()) {
+                fullscreenButton.classList.add('show');
+            }
+
+            // 既存のタイマーをクリア
+            clearTimeout(uiControlsTimeout);
+
+            // 3秒後に自動で非表示にする（UI要素上にマウスがない場合）
+            uiControlsTimeout = setTimeout(() => {
+                if (!isMouseOverUIControls) {
+                    hideUIControls();
+                }
+            }, UI_CONTROLS_HIDE_DELAY);
+        }
+
+        // UI要素を非表示にする関数
+        function hideUIControls() {
+            if (!isMouseOverUIControls) {
+                const submenuButton = document.getElementById('submenu-open-button');
+                const autoplayButton = document.getElementById('autoplay-button-fixed');
+                const modeSwitchContainer = document.getElementById('mode-switch-container');
+                const fullscreenButton = document.getElementById('fullscreen-button-fixed');
+
+                submenuButton.classList.remove('show');
+                autoplayButton.classList.remove('show');
+                modeSwitchContainer.classList.remove('show');
+                fullscreenButton.classList.remove('show');
             }
         }
 
@@ -1876,7 +2018,7 @@
             }
         });
 
-        // 画面上のクリックで表示（見開きモード時は左右ボタン以外）
+        // 画面上のクリックでUI要素を表示（見開きモード時は左右ボタン以外）
         document.addEventListener('click', function(e) {
             // サブメニュー関連の要素をクリックした場合は何もしない
             const submenuButton = document.getElementById('submenu-open-button');
@@ -1884,11 +2026,25 @@
 
             if (submenuButton.contains(e.target)) {
                 // サブメニューボタンがクリックされた場合は何もしない（toggleSubmenuが処理する）
+                // UI要素のタイマーをリセット
+                clearTimeout(uiControlsTimeout);
+                uiControlsTimeout = setTimeout(() => {
+                    if (!isMouseOverUIControls) {
+                        hideUIControls();
+                    }
+                }, UI_CONTROLS_HIDE_DELAY);
                 return;
             }
 
             if (submenuPopup.contains(e.target)) {
                 // サブメニュー内をクリックした場合は何もしない
+                // UI要素のタイマーをリセット
+                clearTimeout(uiControlsTimeout);
+                uiControlsTimeout = setTimeout(() => {
+                    if (!isMouseOverUIControls) {
+                        hideUIControls();
+                    }
+                }, UI_CONTROLS_HIDE_DELAY);
                 return;
             }
 
@@ -1908,18 +2064,33 @@
                 }
             }
 
-            // それ以外の場所がクリックされたら表示
+            // それ以外の場所がクリックされたらUI要素とナビゲーションバーを表示
+            showUIControls();
             showNavBar();
         });
 
         // タッチイベント（モバイル対応）
         document.addEventListener('touchstart', function(e) {
+            const submenuButton = document.getElementById('submenu-open-button');
+            const submenuPopup = document.getElementById('submenu-popup');
+            const touch = e.touches[0];
+            const target = document.elementFromPoint(touch.clientX, touch.clientY);
+
+            // サブメニュー関連をタップした場合はUI要素のタイマーをリセット
+            if (submenuButton.contains(target) || submenuPopup.contains(target)) {
+                clearTimeout(uiControlsTimeout);
+                uiControlsTimeout = setTimeout(() => {
+                    if (!isMouseOverUIControls) {
+                        hideUIControls();
+                    }
+                }, UI_CONTROLS_HIDE_DELAY);
+                return;
+            }
+
             // 見開きモード時は左右のページ移動ボタンをタップした場合は表示しない
             if (viewMode === 'normal') {
                 const nextButton = document.getElementById('next-button');
                 const prevButton = document.getElementById('prev-button');
-                const touch = e.touches[0];
-                const target = document.elementFromPoint(touch.clientX, touch.clientY);
 
                 // タップされた要素がページ移動ボタンかどうか確認
                 if (target === nextButton || target === prevButton) {
@@ -1927,8 +2098,35 @@
                 }
             }
 
-            // それ以外の場所がタップされたら表示
+            // それ以外の場所がタップされたらUI要素とナビゲーションバーを表示
+            showUIControls();
             showNavBar();
+        });
+
+        // UI要素にマウスが乗っている間は非表示にしない
+        const uiElements = [
+            document.getElementById('submenu-open-button'),
+            document.getElementById('submenu-popup'),
+            document.getElementById('autoplay-button-fixed'),
+            document.getElementById('mode-switch-container'),
+            document.getElementById('fullscreen-button-fixed')
+        ];
+
+        uiElements.forEach(element => {
+            if (element) {
+                element.addEventListener('mouseenter', function() {
+                    isMouseOverUIControls = true;
+                    clearTimeout(uiControlsTimeout);
+                });
+
+                element.addEventListener('mouseleave', function() {
+                    isMouseOverUIControls = false;
+                    // マウスが離れたら3秒後に非表示
+                    uiControlsTimeout = setTimeout(() => {
+                        hideUIControls();
+                    }, UI_CONTROLS_HIDE_DELAY);
+                });
+            }
         });
 
         // ナビゲーションバーにマウスが乗っている間は非表示にしない
