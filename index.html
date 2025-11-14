@@ -244,6 +244,103 @@
                 transform: scale(1.05);
             }
         }
+
+        /* サブメニューオープンボタン */
+        #submenu-open-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 48px;
+            height: 48px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            z-index: 30;
+            display: none;
+            padding: 0;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+
+        #submenu-open-button:hover {
+            opacity: 1;
+        }
+
+        #submenu-open-button img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        #submenu-open-button.visible {
+            display: block;
+        }
+
+        /* サブメニューポップアップ */
+        #submenu-popup {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            z-index: 25;
+            display: none;
+            min-width: 180px;
+        }
+
+        #submenu-popup.visible {
+            display: block;
+        }
+
+        .submenu-section {
+            margin-bottom: 15px;
+        }
+
+        .submenu-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .submenu-section-title {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+            margin-bottom: 8px;
+            padding-left: 5px;
+        }
+
+        .submenu-button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 5px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s, border-color 0.2s;
+            text-align: center;
+        }
+
+        .submenu-button:last-child {
+            margin-bottom: 0;
+        }
+
+        .submenu-button:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .submenu-button:active {
+            background-color: rgba(255, 255, 255, 0.4);
+        }
+
+        .submenu-button.active {
+            background-color: rgba(100, 150, 255, 0.4);
+            border-color: rgba(100, 150, 255, 0.6);
+        }
     </style>
 </head>
 <body>
@@ -275,11 +372,31 @@
         <!-- ナビゲーションバー -->
         <div id="nav-bar">
             <button class="nav-bar-button" onclick="toggleViewMode()">シームレス表示</button>
-            <button id="direction-button" class="nav-bar-button" onclick="toggleDirection()" style="display: none;">縦読み</button>
-            <button id="shrink-button" class="nav-bar-button" onclick="toggleShrink()" style="display: none;">縮小表示</button>
-            <button id="zoom-button" class="nav-bar-button" onclick="toggleZoom()" style="display: none;">拡大表示</button>
             <button id="autoplay-button" class="nav-bar-button" onclick="toggleAutoplay()" style="display: none;">自動再生</button>
             <button class="nav-bar-button" onclick="toggleFullscreen()">全画面</button>
+        </div>
+
+        <!-- サブメニューオープンボタン -->
+        <button id="submenu-open-button" onclick="toggleSubmenu()">
+            <img src="public/images/submenu_open.png" alt="メニュー">
+        </button>
+
+        <!-- サブメニューポップアップ -->
+        <div id="submenu-popup">
+            <!-- ズームセクション -->
+            <div class="submenu-section" id="submenu-zoom-section">
+                <div class="submenu-section-title">ズーム</div>
+                <button class="submenu-button" onclick="setZoomLevel(0.5)">縮小</button>
+                <button class="submenu-button active" onclick="setZoomLevel(1)">標準</button>
+                <button class="submenu-button" onclick="setZoomLevel(2)">拡大</button>
+            </div>
+
+            <!-- 読み方向セクション -->
+            <div class="submenu-section" id="submenu-direction-section">
+                <div class="submenu-section-title">読み方向</div>
+                <button class="submenu-button" id="submenu-vertical-button" onclick="switchToVertical()">縦読み</button>
+                <button class="submenu-button" id="submenu-horizontal-button" onclick="switchToHorizontal()">横読み</button>
+            </div>
         </div>
     </div>
 
@@ -479,9 +596,113 @@
         // 表示倍率の管理
         let zoomLevel = 1; // 0.5: 縮小表示, 1: 標準表示, 2: 拡大表示
 
+        // サブメニューの管理
+        let submenuOpen = false;
+
         // 画面が横長かどうかを判定
         function isLandscape() {
             return window.innerWidth > window.innerHeight;
+        }
+
+        // サブメニューの開閉
+        function toggleSubmenu() {
+            submenuOpen = !submenuOpen;
+            const submenuPopup = document.getElementById('submenu-popup');
+            if (submenuOpen) {
+                submenuPopup.classList.add('visible');
+            } else {
+                submenuPopup.classList.remove('visible');
+            }
+        }
+
+        // サブメニューボタンの表示/非表示を更新
+        function updateSubmenuVisibility() {
+            const submenuButton = document.getElementById('submenu-open-button');
+
+            if (viewMode !== 'normal') {
+                // シームレスモード時はサブメニューボタンを表示
+                submenuButton.classList.add('visible');
+            } else {
+                // 通常モード時はサブメニューボタンを非表示
+                submenuButton.classList.remove('visible');
+                // サブメニューを閉じる
+                if (submenuOpen) {
+                    toggleSubmenu();
+                }
+            }
+        }
+
+        // ズームレベルを設定
+        function setZoomLevel(level) {
+            if (zoomLevel === level) {
+                return; // 既に同じレベルの場合は何もしない
+            }
+
+            const seamlessContainer = document.getElementById('seamless-container');
+            const verticalContainer = document.getElementById('vertical-container');
+
+            // ズームレベルを更新
+            zoomLevel = level;
+
+            // ボタンの状態を更新
+            const zoomButtons = document.querySelectorAll('#submenu-zoom-section .submenu-button');
+            zoomButtons.forEach(button => {
+                button.classList.remove('active');
+            });
+
+            if (level === 0.5) {
+                zoomButtons[0].classList.add('active'); // 縮小
+                seamlessContainer.classList.add('zoomed');
+                verticalContainer.classList.add('zoomed');
+                console.log('縮小表示を有効化しました (0.5倍)');
+            } else if (level === 1) {
+                zoomButtons[1].classList.add('active'); // 標準
+                seamlessContainer.classList.remove('zoomed');
+                verticalContainer.classList.remove('zoomed');
+                console.log('標準表示に設定しました (1倍)');
+            } else if (level === 2) {
+                zoomButtons[2].classList.add('active'); // 拡大
+                seamlessContainer.classList.add('zoomed');
+                verticalContainer.classList.add('zoomed');
+                console.log('拡大表示を有効化しました (2倍)');
+            }
+
+            // 現在のモードに応じて再描画
+            redrawZoomLevel();
+        }
+
+        // 縦読みモードに切り替え
+        function switchToVertical() {
+            if (seamlessDirection === 'vertical') {
+                return; // 既に縦読みモードの場合は何もしない
+            }
+
+            // toggleDirection() を呼び出して切り替え
+            toggleDirection();
+        }
+
+        // 横読みモードに切り替え
+        function switchToHorizontal() {
+            if (seamlessDirection === 'horizontal') {
+                return; // 既に横読みモードの場合は何もしない
+            }
+
+            // toggleDirection() を呼び出して切り替え
+            toggleDirection();
+        }
+
+        // 読み方向ボタンの状態を更新
+        function updateDirectionButtons() {
+            const verticalButton = document.getElementById('submenu-vertical-button');
+            const horizontalButton = document.getElementById('submenu-horizontal-button');
+
+            if (seamlessDirection === 'vertical') {
+                verticalButton.classList.add('active');
+                horizontalButton.classList.remove('active');
+            } else {
+                verticalButton.classList.remove('active');
+                horizontalButton.classList.add('active');
+            }
         }
 
         // モード切り替え
@@ -495,28 +716,29 @@
                 document.getElementById('normal-mode-content').style.display = 'none';
                 document.querySelector('.nav-bar-button').textContent = '見開き表示';
 
-                // 方向切り替えボタン、縮小・拡大表示ボタン、自動再生ボタンを表示
-                document.getElementById('direction-button').style.display = 'block';
-                document.getElementById('shrink-button').style.display = 'block';
-                document.getElementById('zoom-button').style.display = 'block';
+                // 自動再生ボタンを表示
                 document.getElementById('autoplay-button').style.display = 'block';
+
+                // サブメニューボタンを表示
+                updateSubmenuVisibility();
 
                 // 画面の向きに応じて初期化
                 if (landscape) {
                     // 横長 → 横読みモード
                     document.getElementById('seamless-container').classList.add('active');
                     document.getElementById('vertical-container').classList.remove('active');
-                    document.getElementById('direction-button').textContent = '縦読み';
                     initSeamlessMode();
                     console.log('画面が横長のため、横読みモードで開始');
                 } else {
                     // 縦長 → 縦読みモード
                     document.getElementById('seamless-container').classList.remove('active');
                     document.getElementById('vertical-container').classList.add('active');
-                    document.getElementById('direction-button').textContent = '横読み';
                     initVerticalMode();
                     console.log('画面が縦長のため、縦読みモードで開始');
                 }
+
+                // 読み方向ボタンの状態を更新
+                updateDirectionButtons();
             } else {
                 // 通常モードに切り替え
                 viewMode = 'normal';
@@ -525,22 +747,18 @@
                 document.getElementById('normal-mode-content').style.display = 'block';
                 document.querySelector('.nav-bar-button').textContent = 'シームレス表示';
 
-                // 自動再生、縮小表示、拡大表示を停止して非表示
+                // 自動再生を停止して非表示
                 if (autoplayEnabled) {
                     toggleAutoplay();
                 }
                 // ズームレベルを標準に戻す
                 if (zoomLevel !== 1) {
-                    zoomLevel = 1;
-                    document.getElementById('shrink-button').textContent = '縮小表示';
-                    document.getElementById('shrink-button').style.backgroundColor = '';
-                    document.getElementById('zoom-button').textContent = '拡大表示';
-                    document.getElementById('zoom-button').style.backgroundColor = '';
+                    setZoomLevel(1);
                 }
-                document.getElementById('direction-button').style.display = 'none';
-                document.getElementById('shrink-button').style.display = 'none';
-                document.getElementById('zoom-button').style.display = 'none';
                 document.getElementById('autoplay-button').style.display = 'none';
+
+                // サブメニューボタンを非表示
+                updateSubmenuVisibility();
 
                 // 通常モードを再描画
                 if (Module.ccall) {
@@ -562,7 +780,6 @@
                 viewMode = 'seamless-vertical';
                 document.getElementById('seamless-container').classList.remove('active');
                 document.getElementById('vertical-container').classList.add('active');
-                document.getElementById('direction-button').textContent = '横読み';
 
                 // 縦読みモードを初期化
                 initVerticalMode();
@@ -572,11 +789,13 @@
                 viewMode = 'seamless-horizontal';
                 document.getElementById('seamless-container').classList.add('active');
                 document.getElementById('vertical-container').classList.remove('active');
-                document.getElementById('direction-button').textContent = '縦読み';
 
                 // 横読みモードを初期化
                 initSeamlessMode();
             }
+
+            // 読み方向ボタンの状態を更新
+            updateDirectionButtons();
         }
 
         // シームレスモード（横読み）の初期化
@@ -1228,88 +1447,6 @@
             }, 1000 / AUTOPLAY_FPS);
         }
 
-        // 拡大表示の切り替え
-        function toggleZoom() {
-            const zoomButton = document.getElementById('zoom-button');
-            const shrinkButton = document.getElementById('shrink-button');
-            const seamlessContainer = document.getElementById('seamless-container');
-            const verticalContainer = document.getElementById('vertical-container');
-
-            if (zoomLevel !== 2) {
-                // 拡大表示を有効化
-                zoomLevel = 2;
-                zoomButton.textContent = '標準表示';
-                zoomButton.style.backgroundColor = 'rgba(100, 150, 255, 0.3)';
-
-                // 縮小表示がオンの場合はオフにする
-                if (shrinkButton.textContent === '標準表示') {
-                    shrinkButton.textContent = '縮小表示';
-                    shrinkButton.style.backgroundColor = '';
-                }
-
-                // zoomedクラスを追加
-                seamlessContainer.classList.add('zoomed');
-                verticalContainer.classList.add('zoomed');
-
-                console.log('拡大表示を有効化しました (2倍)');
-            } else {
-                // 標準表示に戻す
-                zoomLevel = 1;
-                zoomButton.textContent = '拡大表示';
-                zoomButton.style.backgroundColor = '';
-
-                // zoomedクラスを削除
-                seamlessContainer.classList.remove('zoomed');
-                verticalContainer.classList.remove('zoomed');
-
-                console.log('標準表示に戻しました (1倍)');
-            }
-
-            // 現在のモードに応じて再描画
-            redrawZoomLevel();
-        }
-
-        // 縮小表示の切り替え
-        function toggleShrink() {
-            const shrinkButton = document.getElementById('shrink-button');
-            const zoomButton = document.getElementById('zoom-button');
-            const seamlessContainer = document.getElementById('seamless-container');
-            const verticalContainer = document.getElementById('vertical-container');
-
-            if (zoomLevel !== 0.5) {
-                // 縮小表示を有効化
-                zoomLevel = 0.5;
-                shrinkButton.textContent = '標準表示';
-                shrinkButton.style.backgroundColor = 'rgba(150, 100, 255, 0.3)';
-
-                // 拡大表示がオンの場合はオフにする
-                if (zoomButton.textContent === '標準表示') {
-                    zoomButton.textContent = '拡大表示';
-                    zoomButton.style.backgroundColor = '';
-                }
-
-                // zoomedクラスを追加
-                seamlessContainer.classList.add('zoomed');
-                verticalContainer.classList.add('zoomed');
-
-                console.log('縮小表示を有効化しました (0.5倍)');
-            } else {
-                // 標準表示に戻す
-                zoomLevel = 1;
-                shrinkButton.textContent = '縮小表示';
-                shrinkButton.style.backgroundColor = '';
-
-                // zoomedクラスを削除
-                seamlessContainer.classList.remove('zoomed');
-                verticalContainer.classList.remove('zoomed');
-
-                console.log('標準表示に戻しました (1倍)');
-            }
-
-            // 現在のモードに応じて再描画
-            redrawZoomLevel();
-        }
-
         // ズームレベル変更時の再描画処理
         function redrawZoomLevel() {
             if (seamlessDirection === 'horizontal') {
@@ -1480,6 +1617,25 @@
 
         // 画面上のクリックで表示（見開きモード時は左右ボタン以外）
         document.addEventListener('click', function(e) {
+            // サブメニュー関連の要素をクリックした場合は何もしない
+            const submenuButton = document.getElementById('submenu-open-button');
+            const submenuPopup = document.getElementById('submenu-popup');
+
+            if (submenuButton.contains(e.target)) {
+                // サブメニューボタンがクリックされた場合は何もしない（toggleSubmenuが処理する）
+                return;
+            }
+
+            if (submenuPopup.contains(e.target)) {
+                // サブメニュー内をクリックした場合は何もしない
+                return;
+            }
+
+            // サブメニューが開いている状態で、外側をクリックした場合は閉じる
+            if (submenuOpen) {
+                toggleSubmenu();
+            }
+
             // 見開きモード時は左右のページ移動ボタンをクリックした場合は表示しない
             if (viewMode === 'normal') {
                 const nextButton = document.getElementById('next-button');
@@ -1602,8 +1758,8 @@
                                 viewMode = 'seamless-horizontal';
                                 document.getElementById('seamless-container').classList.add('active');
                                 document.getElementById('vertical-container').classList.remove('active');
-                                document.getElementById('direction-button').textContent = '縦読み';
                                 initSeamlessMode();
+                                updateDirectionButtons();
                                 console.log('横読みモードに自動切り替え');
                             }
                         } else {
@@ -1613,8 +1769,8 @@
                                 viewMode = 'seamless-vertical';
                                 document.getElementById('seamless-container').classList.remove('active');
                                 document.getElementById('vertical-container').classList.add('active');
-                                document.getElementById('direction-button').textContent = '横読み';
                                 initVerticalMode();
+                                updateDirectionButtons();
                                 console.log('縦読みモードに自動切り替え');
                             }
                         }
