@@ -409,10 +409,14 @@ public:
             tempCanvas.width = width;
             tempCanvas.height = height;
 
+
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.putImageData(imageData, 0, 0);
 
             // メインCanvasにリサイズして描画
+ 
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(tempCanvas, x, y, drawWidth, drawHeight);
 
         }, img.width, img.height, img.data.data(), img.data.size(), x, y, width, height);
