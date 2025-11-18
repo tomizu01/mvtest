@@ -408,6 +408,7 @@ public:
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = width;
             tempCanvas.height = height;
+
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.putImageData(imageData, 0, 0);
 

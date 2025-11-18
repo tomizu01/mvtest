@@ -31,6 +31,9 @@
             -webkit-user-select: none;
             -moz-user-select: none;
             -ms-user-select: none;
+            /* 高品質な画像レンダリングを指定（スムーズな補間） */
+            image-rendering: auto;
+            image-rendering: smooth;
         }
 
         .nav-button {
@@ -155,6 +158,9 @@
             -webkit-user-select: none;
             -moz-user-select: none;
             -ms-user-select: none;
+            /* 高品質な画像レンダリングを指定（スムーズな補間） */
+            image-rendering: auto;
+            image-rendering: smooth;
         }
 
         /* 縦読みモード用のスタイル */
@@ -194,6 +200,9 @@
             -webkit-user-select: none;
             -moz-user-select: none;
             -ms-user-select: none;
+            /* 高品質な画像レンダリングを指定（スムーズな補間） */
+            image-rendering: auto;
+            image-rendering: smooth;
         }
 
         /* 通常モードのコンテナ */
@@ -759,6 +768,9 @@
                 return;
             }
 
+            // デバイスピクセル比を取得
+            const dpr = window.devicePixelRatio || 1;
+
             // 表示倍率を適用
             const scale = zoomLevel;
 
@@ -768,7 +780,7 @@
             let optimalWidth, canvasHeight;
 
             if (isVerticalMode) {
-                // 縦読みモード：画面幅を基準にサイズを計算
+                // 縦読みモード：画面幅を基準にサイズを計算（論理サイズ）
                 const imageAspect = imgWidth / imgHeight;
                 const canvasWidth = window.innerWidth * scale;
                 const optimalHeight = Math.floor(canvasWidth / imageAspect);
@@ -776,22 +788,27 @@
                 optimalWidth = canvasWidth;
                 canvasHeight = optimalHeight;
             } else {
-                // 横読みモード：画面高さを基準にサイズを計算
+                // 横読みモード：画面高さを基準にサイズを計算（論理サイズ）
                 const imageAspect = imgWidth / imgHeight;
                 canvasHeight = window.innerHeight * scale;
                 optimalWidth = Math.floor(canvasHeight * imageAspect);
             }
 
-            // Canvasのサイズを画像に合わせて調整
-            canvas.width = optimalWidth;
-            canvas.height = canvasHeight;
+            // Canvasの描画バッファサイズを物理ピクセルで設定（高DPI対応）
+            canvas.width = Math.floor(optimalWidth * dpr);
+            canvas.height = Math.floor(canvasHeight * dpr);
+            // CSSサイズは論理ピクセルで設定
             canvas.style.width = optimalWidth + 'px';
             canvas.style.height = canvasHeight + 'px';
 
-            console.log(`Canvas ${canvasId} adjusted to: ${optimalWidth}x${canvasHeight}, scale: ${scale}, mode: ${isVerticalMode ? 'vertical' : 'horizontal'}`);
+            console.log(`Canvas ${canvasId} adjusted to: ${optimalWidth}x${canvasHeight} (logical), ${canvas.width}x${canvas.height} (physical), dpr: ${dpr}, scale: ${scale}, mode: ${isVerticalMode ? 'vertical' : 'horizontal'}`);
             console.log(`Image size: ${imgWidth}x${imgHeight}`);
 
-            // 画像を画面いっぱいに描画（アスペクト比維持）
+            // コンテキストをデバイスピクセル比でスケーリング
+            ctx.setTransform(1, 0, 0, 1, 0, 0); // リセット
+            ctx.scale(dpr, dpr);
+
+            // 画像を画面いっぱいに描画（アスペクト比維持）- 論理座標系で指定
             const displayWidth = optimalWidth;
             const displayHeight = canvasHeight;
 
@@ -821,7 +838,11 @@
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.putImageData(imageData, 0, 0);
 
-            // メインCanvasいっぱいに描画
+            // 高品質な画像描画設定
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+
+            // メインCanvasいっぱいに描画（論理座標系で指定）
             ctx.drawImage(tempCanvas, 0, 0, displayWidth, displayHeight);
 
             console.log(`Rendered page to canvas ${canvasId}`);
@@ -1305,20 +1326,25 @@
             canvas.dataset.pageNum = pageNum;
             canvas.dataset.loaded = 'false';
 
-            // 一般的なマンガのアスペクト比（2:3）で初期サイズを設定
+            // デバイスピクセル比を取得
+            const dpr = window.devicePixelRatio || 1;
+
+            // 一般的なマンガのアスペクト比（2:3）で初期サイズを設定（論理サイズ）
             // 表示倍率を適用
             const scale = zoomLevel;
             const canvasHeight = window.innerHeight * scale;
             const canvasWidth = Math.floor(canvasHeight * (2 / 3));
 
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
+            // 描画バッファサイズは物理ピクセル（高DPI対応）
+            canvas.width = Math.floor(canvasWidth * dpr);
+            canvas.height = Math.floor(canvasHeight * dpr);
+            // CSSサイズは論理ピクセル
             canvas.style.width = canvasWidth + 'px';
             canvas.style.height = canvasHeight + 'px';
 
             seamlessPages.push(pageNum);
 
-            console.log(`Created horizontal canvas for page ${pageNum}, size: ${canvas.width}x${canvas.height}, scale: ${scale}`);
+            console.log(`Created horizontal canvas for page ${pageNum}, logical: ${canvasWidth}x${canvasHeight}, physical: ${canvas.width}x${canvas.height}, dpr: ${dpr}, scale: ${scale}`);
 
             return canvas;
         }
@@ -1337,20 +1363,25 @@
             canvas.dataset.pageNum = pageNum;
             canvas.dataset.loaded = 'false';
 
-            // 一般的なマンガのアスペクト比（2:3）で初期サイズを設定
+            // デバイスピクセル比を取得
+            const dpr = window.devicePixelRatio || 1;
+
+            // 一般的なマンガのアスペクト比（2:3）で初期サイズを設定（論理サイズ）
             // 表示倍率を適用
             const scale = zoomLevel;
             const canvasWidth = window.innerWidth * scale;
             const canvasHeight = Math.floor(canvasWidth * (3 / 2));
 
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
+            // 描画バッファサイズは物理ピクセル（高DPI対応）
+            canvas.width = Math.floor(canvasWidth * dpr);
+            canvas.height = Math.floor(canvasHeight * dpr);
+            // CSSサイズは論理ピクセル
             canvas.style.width = canvasWidth + 'px';
             canvas.style.height = canvasHeight + 'px';
 
             verticalPages.push(pageNum);
 
-            console.log(`Created vertical canvas for page ${pageNum}, size: ${canvas.width}x${canvas.height}, scale: ${scale}`);
+            console.log(`Created vertical canvas for page ${pageNum}, logical: ${canvasWidth}x${canvasHeight}, physical: ${canvas.width}x${canvas.height}, dpr: ${dpr}, scale: ${scale}`);
 
             return canvas;
         }
@@ -1833,17 +1864,20 @@
 
         // 横読みモードのCanvasを再作成
         function recreateHorizontalCanvases() {
+            const dpr = window.devicePixelRatio || 1;
             const pages = [...seamlessPages];
             pages.forEach(pageNum => {
                 const canvas = document.getElementById(`page-canvas-${pageNum}`);
                 if (canvas) {
-                    // Canvasのサイズを再計算
+                    // Canvasのサイズを再計算（論理サイズ）
                     const scale = zoomLevel;
                     const canvasHeight = window.innerHeight * scale;
                     const canvasWidth = Math.floor(canvasHeight * (2 / 3));
 
-                    canvas.width = canvasWidth;
-                    canvas.height = canvasHeight;
+                    // 描画バッファサイズは物理ピクセル（高DPI対応）
+                    canvas.width = Math.floor(canvasWidth * dpr);
+                    canvas.height = Math.floor(canvasHeight * dpr);
+                    // CSSサイズは論理ピクセル
                     canvas.style.width = canvasWidth + 'px';
                     canvas.style.height = canvasHeight + 'px';
                     canvas.dataset.loaded = 'false';
@@ -1853,17 +1887,20 @@
 
         // 縦読みモードのCanvasを再作成
         function recreateVerticalCanvases() {
+            const dpr = window.devicePixelRatio || 1;
             const pages = [...verticalPages];
             pages.forEach(pageNum => {
                 const canvas = document.getElementById(`vertical-canvas-${pageNum}`);
                 if (canvas) {
-                    // Canvasのサイズを再計算
+                    // Canvasのサイズを再計算（論理サイズ）
                     const scale = zoomLevel;
                     const canvasWidth = window.innerWidth * scale;
                     const canvasHeight = Math.floor(canvasWidth * (3 / 2));
 
-                    canvas.width = canvasWidth;
-                    canvas.height = canvasHeight;
+                    // 描画バッファサイズは物理ピクセル（高DPI対応）
+                    canvas.width = Math.floor(canvasWidth * dpr);
+                    canvas.height = Math.floor(canvasHeight * dpr);
+                    // CSSサイズは論理ピクセル
                     canvas.style.width = canvasWidth + 'px';
                     canvas.style.height = canvasHeight + 'px';
                     canvas.dataset.loaded = 'false';
