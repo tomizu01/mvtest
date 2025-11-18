@@ -542,6 +542,75 @@
         #mode-switch-container {
             right: 150px; /* 全画面ボタン(幅約40px) + 余白(100px) */
         }
+
+        /* モバイルデバイス向けのスタイル調整 */
+        @media screen and (max-width: 768px) {
+            /* サブメニューオープンボタンを小さく */
+            #submenu-open-button {
+                top: 15px;
+                right: 15px;
+                width: 40px;
+                height: 40px;
+            }
+
+            /* サブメニューポップアップの位置調整 */
+            #submenu-popup {
+                top: 60px;
+                right: 15px;
+                padding: 12px;
+            }
+
+            .submenu-section-title {
+                font-size: 11px;
+            }
+
+            .submenu-button {
+                padding: 8px 10px;
+                font-size: 12px;
+            }
+
+            .submenu-button img {
+                width: 18px;
+                height: 18px;
+            }
+
+            /* 自動再生ボタンを小さく */
+            #autoplay-button-fixed {
+                bottom: 20px;
+                left: 20px;
+                padding: 8px 16px;
+                font-size: 12px;
+                border-radius: 20px;
+            }
+
+            #autoplay-button-fixed img {
+                width: 16px;
+                height: 16px;
+            }
+
+            /* モード切り替えボタンを小さく */
+            #mode-switch-container {
+                bottom: 20px;
+                right: 20px;
+                padding: 6px;
+                border-radius: 20px;
+                gap: 3px;
+            }
+
+            .mode-switch-button img {
+                height: 32px;
+            }
+
+            /* 全画面ボタンを小さく */
+            #fullscreen-button-fixed {
+                bottom: 20px;
+                right: 20px;
+            }
+
+            #fullscreen-button-fixed img {
+                height: 32px;
+            }
+        }
     </style>
 </head>
 <body>

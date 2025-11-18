@@ -59,6 +59,12 @@ https://mvtest.ci-labo.net/images/[コミックID]/[ページ番号].jpg.enc
 - [x] 画面の向きに応じた自動切り替え
 - [x] ページ送り・戻し機能（1ページまたは2ページずつ）
 - [x] レスポンシブ表示（ウィンドウサイズに自動適応）
+- [x] 高DPI画面対応（Retina、高解像度モバイルディスプレイ）
+  - devicePixelRatio考慮した描画バッファサイズ設定
+  - iPhone/iPad（dpr=2〜3）、Android（dpr=2〜4）で鮮明な表示
+  - Canvas描画バッファ = 論理サイズ × devicePixelRatio
+  - imageSmoothingQuality = 'high'による高品質補間
+  - モアレ（干渉縞）の大幅な軽減
 
 ### 2. シームレス表示モード
 - [x] 横読みモード
@@ -363,6 +369,23 @@ cd /var/www/mvtest
 **問題**: 縮小表示（0.5倍）にした際、横読みモードで画像が画面上部に寄ってしまい見づらい
 **解決**: `#seamless-scroll`に`align-items: center`を追加して縦方向中央に配置
 
+### 12. モバイルブラウザでの画像解像度低下とモアレ発生（2025-11-18）
+**問題**: モバイルデバイス（特にスマートフォン）で画像が低解像度になり、モアレ（干渉縞）が発生
+**原因**:
+- Canvas要素の描画バッファサイズとCSSサイズが同じになっており、`window.devicePixelRatio`を考慮していなかった
+- モバイルデバイスのdevicePixelRatioは通常2〜4のため、描画バッファが物理ピクセル数に対して不足
+- 引き伸ばされることで画質が劣化しモアレが発生
+**解決**:
+1. **devicePixelRatio対応の実装**
+   - Canvas描画バッファ = 論理サイズ × devicePixelRatio
+   - CSSサイズ = 論理サイズ
+   - コンテキストをdevicePixelRatioでスケーリング
+2. **imageSmoothingQuality = 'high'の設定**
+   - 見開きモード（main.cpp）とシームレスモード（index.html）の両方に設定
+   - 高品質な画像補間アルゴリズムを使用
+3. **CSSのimage-rendering設定**
+   - `image-rendering: auto; image-rendering: smooth;`を全Canvas要素に適用
+
 ## パフォーマンス
 
 ### メモリ使用量
@@ -487,11 +510,57 @@ done
 
 ## 最終更新
 
-- **日付**: 2025-11-14
+- **日付**: 2025-11-18
 - **最終ビルド**: mukuviewer.js (36KB), mukuviewer.wasm (125KB)
-- **作業状況**: UI再設計、モバイル対応、UI要素の自動表示/非表示機能を実装
+- **作業状況**: 高DPI画面対応、画像品質の最適化（モアレ対策）
 
-### 本セッションで実装した機能（2025-11-14）
+### 本セッションで実装した機能（2025-11-18）
+1. **devicePixelRatio対応（高DPI画面でのモアレ対策）**
+   - Canvas描画バッファサイズを物理ピクセルで設定
+     - `canvas.width = Math.floor(logicalWidth * devicePixelRatio)`
+     - `canvas.height = Math.floor(logicalHeight * devicePixelRatio)`
+   - CSSサイズは論理ピクセルで設定
+     - `canvas.style.width = logicalWidth + 'px'`
+     - `canvas.style.height = logicalHeight + 'px'`
+   - コンテキストをdevicePixelRatioでスケーリング
+     - `ctx.scale(dpr, dpr)`
+   - 実装箇所：
+     - `renderPageToCanvas`関数（index.html:797-809）- シームレスモード用
+     - `createPageCanvas`関数（index.html:1338-1343）- 横読みCanvas作成
+     - `createVerticalPageCanvas`関数（index.html:1375-1380）- 縦読みCanvas作成
+     - `recreateHorizontalCanvases`関数（index.html:1873-1881）- 横読みCanvas再作成
+     - `recreateVerticalCanvases`関数（index.html:1912-1920）- 縦読みCanvas再作成
+   - 効果：iPhone/iPad（dpr=2〜3）、高解像度Android（dpr=2〜4）で鮮明な表示を実現
+
+2. **imageSmoothingQuality = 'high'の設定（モアレ対策）**
+   - **見開きモード**（main.cpp:418-419）
+     ```javascript
+     ctx.imageSmoothingEnabled = true;
+     ctx.imageSmoothingQuality = 'high';
+     ```
+   - **シームレスモード**（index.html:842-843）
+     ```javascript
+     ctx.imageSmoothingEnabled = true;
+     ctx.imageSmoothingQuality = 'high';
+     ```
+   - 両方のモードで高品質な画像補間アルゴリズムを適用
+   - 画像縮小時のモアレ（干渉縞）をほぼ解消
+
+3. **CSSによる画像レンダリング品質の最適化**
+   - 全てのCanvas要素（#viewer-canvas、.page-canvas、.vertical-page-canvas）に適用
+     ```css
+     image-rendering: auto;
+     image-rendering: smooth;
+     ```
+   - ブラウザのスムーズな補間アルゴリズムを明示的に指定
+
+4. **問題の調査と解決**
+   - モバイルブラウザでの画像解像度低下とモアレ発生の原因を特定
+   - devicePixelRatioを考慮していなかったことが原因
+   - 見開きモードで特に顕著だったモアレ問題を解決
+   - 元素材の加工ではなく、描画アルゴリズムの改善で対応
+
+### 過去のセッションで実装した機能（2025-11-14）
 1. **UIの再設計とメニュー整理**
    - 画面右上にサブメニューオープンボタン（submenu_open.png）を配置
    - サブメニューポップアップに機能を集約
@@ -623,6 +692,7 @@ done
 12. ✅ UIの再設計とメニュー整理 → 完了
 13. ✅ モバイルデバイス対応 → 完了
 14. ✅ UI要素の自動表示/非表示機能 → 完了
+15. ✅ モバイルブラウザでの画像品質改善 → 完了（devicePixelRatio対応、モアレ対策）
 
 ### 次のステップ候補
 - ページ番号表示UIの追加
