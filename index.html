@@ -763,13 +763,19 @@
                         Module.ccall('initialize', null, ['string'], [bookId]);
 
                         // 画面の向きに応じて1ページモード/2ページモードを設定
-                        const landscape = isLandscape();
+                        const landscape = window.innerWidth > window.innerHeight;
                         const singlePage = !landscape; // 縦長の場合は1ページモード
                         Module.ccall('setSinglePageMode', null, ['boolean'], [singlePage]);
                         console.log(`初期表示モード: ${landscape ? '2ページ（横長）' : '1ページ（縦長）'}`);
 
                         // モバイルデバイスの場合は全画面ボタンを非表示、モード切り替えボタンを右端に移動
-                        if (isMobileDevice()) {
+                        const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+                        const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet/i;
+                        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+                        const isSmallScreen = window.innerWidth <= 1024;
+                        const isMobile = mobileRegex.test(userAgent) || (isTouchDevice && isSmallScreen);
+
+                        if (isMobile) {
                             const fullscreenButton = document.getElementById('fullscreen-button-fixed');
                             if (fullscreenButton) {
                                 fullscreenButton.style.display = 'none';
@@ -782,6 +788,31 @@
                                 console.log('モバイルデバイスのためモード切り替えボタンを右端に配置しました');
                             }
                         }
+
+                        // UI要素のイベントリスナーを初期化（簡潔版）
+                        window.isMouseOverUIControls = false;
+                        ['submenu-open-button', 'submenu-popup', 'autoplay-button-fixed', 'mode-switch-container', 'fullscreen-button-fixed'].forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) {
+                                el.addEventListener('mouseenter', () => { window.isMouseOverUIControls = true; clearTimeout(window.uiControlsTimeout); });
+                                el.addEventListener('mouseleave', () => { window.isMouseOverUIControls = false; window.uiControlsTimeout = setTimeout(() => Module.ccall('hideUIControls', null, [], []), 3000); });
+                            }
+                        });
+                        document.addEventListener('click', e => {
+                            const s = document.getElementById('submenu-open-button'), p = document.getElementById('submenu-popup');
+                            if ((s && s.contains(e.target)) || (p && p.contains(e.target))) { clearTimeout(window.uiControlsTimeout); window.uiControlsTimeout = setTimeout(() => { if (!window.isMouseOverUIControls) Module.ccall('hideUIControls', null, [], []); }, 3000); return; }
+                            if (window.submenuOpen && p) { p.classList.remove('visible'); window.submenuOpen = false; }
+                            if (window.viewMode === 'normal' && (e.target === document.getElementById('next-button') || e.target === document.getElementById('prev-button'))) return;
+                            Module.ccall('showUIControls', null, [], []);
+                        });
+                        document.addEventListener('touchstart', e => {
+                            const s = document.getElementById('submenu-open-button'), p = document.getElementById('submenu-popup'), t = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+                            if ((s && s.contains(t)) || (p && p.contains(t))) { clearTimeout(window.uiControlsTimeout); window.uiControlsTimeout = setTimeout(() => { if (!window.isMouseOverUIControls) Module.ccall('hideUIControls', null, [], []); }, 3000); return; }
+                            if (window.viewMode === 'normal' && (t === document.getElementById('next-button') || t === document.getElementById('prev-button'))) return;
+                            Module.ccall('showUIControls', null, [], []);
+                        });
+                        document.addEventListener('fullscreenchange', () => Module.ccall('updateFullscreenIcon', null, [], []));
+                        document.addEventListener('webkitfullscreenchange', () => Module.ccall('updateFullscreenIcon', null, [], []));
                     } else {
                         console.error('Module.ccall is not available');
                     }
@@ -929,7 +960,8 @@
         };
 
         // 表示モードの管理
-        let viewMode = 'normal'; // 'normal', 'seamless-horizontal', 'seamless-vertical'
+        var viewMode = 'normal'; // 'normal', 'seamless-horizontal', 'seamless-vertical'
+        window.viewMode = viewMode; // C++側から参照できるようにする
         let seamlessDirection = 'horizontal'; // 'horizontal' or 'vertical'
         let seamlessPages = [];
         let verticalPages = [];
@@ -948,23 +980,14 @@
         // サブメニューの管理
         let submenuOpen = false;
 
-        // 画面が横長かどうかを判定
+        // 画面が横長かどうかを判定（C++側に移動）
         function isLandscape() {
-            return window.innerWidth > window.innerHeight;
+            return Module.ccall('isLandscape', 'boolean', [], []);
         }
 
-        // モバイルデバイスかどうかを判定
+        // モバイルデバイスかどうかを判定（C++側に移動）
         function isMobileDevice() {
-            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
-
-            // モバイルデバイスのUser-Agentパターン
-            const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet/i;
-
-            // タッチデバイスかつ小さい画面の場合もモバイルとみなす
-            const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-            const isSmallScreen = window.innerWidth <= 1024;
-
-            return mobileRegex.test(userAgent) || (isTouchDevice && isSmallScreen);
+            return Module.ccall('isMobileDevice', 'boolean', [], []);
         }
 
         // サブメニューの開閉
@@ -978,21 +1001,9 @@
             }
         }
 
-        // サブメニューボタンの表示/非表示を更新
+        // サブメニューボタンの表示/非表示を更新（C++側に移動）
         function updateSubmenuVisibility() {
-            const submenuButton = document.getElementById('submenu-open-button');
-
-            if (viewMode !== 'normal') {
-                // シームレスモード時はサブメニューボタンを表示
-                submenuButton.classList.add('visible');
-            } else {
-                // 通常モード時はサブメニューボタンを非表示
-                submenuButton.classList.remove('visible');
-                // サブメニューを閉じる
-                if (submenuOpen) {
-                    toggleSubmenu();
-                }
-            }
+            Module.ccall('updateSubmenuVisibility', null, ['string'], [viewMode]);
         }
 
         // ズームレベルを設定
@@ -1054,18 +1065,9 @@
             toggleDirection();
         }
 
-        // 読み方向ボタンの状態を更新
+        // 読み方向ボタンの状態を更新（C++側に移動）
         function updateDirectionButtons() {
-            const verticalButton = document.getElementById('submenu-vertical-button');
-            const horizontalButton = document.getElementById('submenu-horizontal-button');
-
-            if (seamlessDirection === 'vertical') {
-                verticalButton.classList.add('active');
-                horizontalButton.classList.remove('active');
-            } else {
-                verticalButton.classList.remove('active');
-                horizontalButton.classList.add('active');
-            }
+            Module.ccall('updateDirectionButtons', null, ['string'], [seamlessDirection]);
         }
 
         // シームレスモードに切り替え
@@ -1083,17 +1085,26 @@
             }, UI_CONTROLS_HIDE_DELAY);
 
             // シームレスモードに切り替え（画面サイズに応じて初期モードを決定）
-            const landscape = isLandscape();
+            const landscape = window.innerWidth > window.innerHeight;
             seamlessDirection = landscape ? 'horizontal' : 'vertical';
             viewMode = landscape ? 'seamless-horizontal' : 'seamless-vertical';
+            window.viewMode = viewMode;
 
             document.getElementById('normal-mode-content').style.display = 'none';
 
             // 自動再生ボタンを表示（左下固定）
-            document.getElementById('autoplay-button-fixed').classList.add('visible');
+            const autoplayButton = document.getElementById('autoplay-button-fixed');
+            autoplayButton.classList.add('visible');
+            autoplayButton.classList.add('show');
 
             // サブメニューボタンを表示
             updateSubmenuVisibility();
+
+            // サブメニューオープンボタンも表示
+            const submenuButton = document.getElementById('submenu-open-button');
+            if (submenuButton && submenuButton.classList.contains('visible')) {
+                submenuButton.classList.add('show');
+            }
 
             // 画面の向きに応じて初期化
             if (landscape) {
@@ -1133,6 +1144,7 @@
 
             // 通常モードに切り替え
             viewMode = 'normal';
+            window.viewMode = viewMode;
             document.getElementById('seamless-container').classList.remove('active');
             document.getElementById('vertical-container').classList.remove('active');
             document.getElementById('normal-mode-content').style.display = 'block';
@@ -1147,7 +1159,9 @@
             }
 
             // 自動再生ボタンを非表示
-            document.getElementById('autoplay-button-fixed').classList.remove('visible');
+            const autoplayButton = document.getElementById('autoplay-button-fixed');
+            autoplayButton.classList.remove('visible');
+            autoplayButton.classList.remove('show');
 
             // サブメニューボタンを非表示
             updateSubmenuVisibility();
@@ -1161,31 +1175,19 @@
             updateModeSwitchButtons();
         }
 
-        // モード切り替えボタンの状態を更新
+        // モード切り替えボタンの状態を更新（C++側に移動）
         function updateModeSwitchButtons() {
+            Module.ccall('updateModeSwitchButtons', null, ['string'], [viewMode]);
+            // onclickイベントは JavaScript 側で設定
             const seamlessButton = document.getElementById('seamless-mode-button');
             const normalButton = document.getElementById('normal-mode-button');
-            const seamlessIcon = document.getElementById('seamless-mode-icon');
-            const normalIcon = document.getElementById('normal-mode-icon');
 
             if (viewMode === 'normal') {
-                // 見開きモード時
-                seamlessButton.classList.remove('inactive');
                 seamlessButton.onclick = switchToSeamlessMode;
-                seamlessIcon.src = 'public/images/button_seamless_off.png'; // active（押せる）
-
-                normalButton.classList.add('inactive');
                 normalButton.onclick = null;
-                normalIcon.src = 'public/images/button_mihiraki_on.png'; // inactive（押せない）
             } else {
-                // シームレスモード時
-                seamlessButton.classList.add('inactive');
                 seamlessButton.onclick = null;
-                seamlessIcon.src = 'public/images/button_seamless_on.png'; // inactive（押せない）
-
-                normalButton.classList.remove('inactive');
                 normalButton.onclick = switchToNormalMode;
-                normalIcon.src = 'public/images/button_mihiraki_off.png'; // active（押せる）
             }
         }
 
@@ -1200,6 +1202,7 @@
                 // 縦読みに切り替え
                 seamlessDirection = 'vertical';
                 viewMode = 'seamless-vertical';
+                window.viewMode = viewMode;
                 document.getElementById('seamless-container').classList.remove('active');
                 document.getElementById('vertical-container').classList.add('active');
 
@@ -1209,6 +1212,7 @@
                 // 横読みに切り替え
                 seamlessDirection = 'horizontal';
                 viewMode = 'seamless-horizontal';
+                window.viewMode = viewMode;
                 document.getElementById('seamless-container').classList.add('active');
                 document.getElementById('vertical-container').classList.remove('active');
 
@@ -2025,16 +2029,9 @@
             }
         }
 
-        // 全画面表示アイコンを更新
+        // 全画面表示アイコンを更新（C++側に移動）
         function updateFullscreenIcon() {
-            const icon = document.getElementById('fullscreen-icon');
-            if (document.fullscreenElement || document.webkitFullscreenElement) {
-                // 全画面表示中
-                icon.src = 'public/images/fullscreen_cancel.png';
-            } else {
-                // 通常表示
-                icon.src = 'public/images/fullscreen.png';
-            }
+            Module.ccall('updateFullscreenIcon', null, [], []);
         }
 
         // UI要素の自動表示/非表示管理
@@ -2042,52 +2039,14 @@
         let isMouseOverUIControls = false;
         const UI_CONTROLS_HIDE_DELAY = 3000; // 3秒後に自動で非表示
 
-        // UI要素を表示する関数
+        // UI要素を表示する関数（C++側に移動）
         function showUIControls() {
-            const submenuButton = document.getElementById('submenu-open-button');
-            const autoplayButton = document.getElementById('autoplay-button-fixed');
-            const modeSwitchContainer = document.getElementById('mode-switch-container');
-            const fullscreenButton = document.getElementById('fullscreen-button-fixed');
-
-            // 表示するUI要素にshowクラスを追加
-            if (viewMode !== 'normal' && submenuButton.classList.contains('visible')) {
-                submenuButton.classList.add('show');
-            }
-
-            if (viewMode !== 'normal' && autoplayButton.classList.contains('visible')) {
-                autoplayButton.classList.add('show');
-            }
-
-            modeSwitchContainer.classList.add('show');
-
-            if (!isMobileDevice()) {
-                fullscreenButton.classList.add('show');
-            }
-
-            // 既存のタイマーをクリア
-            clearTimeout(uiControlsTimeout);
-
-            // 3秒後に自動で非表示にする（UI要素上にマウスがない場合）
-            uiControlsTimeout = setTimeout(() => {
-                if (!isMouseOverUIControls) {
-                    hideUIControls();
-                }
-            }, UI_CONTROLS_HIDE_DELAY);
+            Module.ccall('showUIControls', null, [], []);
         }
 
-        // UI要素を非表示にする関数
+        // UI要素を非表示にする関数（C++側に移動）
         function hideUIControls() {
-            if (!isMouseOverUIControls) {
-                const submenuButton = document.getElementById('submenu-open-button');
-                const autoplayButton = document.getElementById('autoplay-button-fixed');
-                const modeSwitchContainer = document.getElementById('mode-switch-container');
-                const fullscreenButton = document.getElementById('fullscreen-button-fixed');
-
-                submenuButton.classList.remove('show');
-                autoplayButton.classList.remove('show');
-                modeSwitchContainer.classList.remove('show');
-                fullscreenButton.classList.remove('show');
-            }
+            Module.ccall('hideUIControls', null, [], []);
         }
 
         // ナビゲーションバーの自動表示/非表示管理
@@ -2135,117 +2094,6 @@
             }
         });
 
-        // 画面上のクリックでUI要素を表示（見開きモード時は左右ボタン以外）
-        document.addEventListener('click', function(e) {
-            // サブメニュー関連の要素をクリックした場合は何もしない
-            const submenuButton = document.getElementById('submenu-open-button');
-            const submenuPopup = document.getElementById('submenu-popup');
-
-            if (submenuButton.contains(e.target)) {
-                // サブメニューボタンがクリックされた場合は何もしない（toggleSubmenuが処理する）
-                // UI要素のタイマーをリセット
-                clearTimeout(uiControlsTimeout);
-                uiControlsTimeout = setTimeout(() => {
-                    if (!isMouseOverUIControls) {
-                        hideUIControls();
-                    }
-                }, UI_CONTROLS_HIDE_DELAY);
-                return;
-            }
-
-            if (submenuPopup.contains(e.target)) {
-                // サブメニュー内をクリックした場合は何もしない
-                // UI要素のタイマーをリセット
-                clearTimeout(uiControlsTimeout);
-                uiControlsTimeout = setTimeout(() => {
-                    if (!isMouseOverUIControls) {
-                        hideUIControls();
-                    }
-                }, UI_CONTROLS_HIDE_DELAY);
-                return;
-            }
-
-            // サブメニューが開いている状態で、外側をクリックした場合は閉じる
-            if (submenuOpen) {
-                toggleSubmenu();
-            }
-
-            // 見開きモード時は左右のページ移動ボタンをクリックした場合は表示しない
-            if (viewMode === 'normal') {
-                const nextButton = document.getElementById('next-button');
-                const prevButton = document.getElementById('prev-button');
-
-                // クリックされた要素がページ移動ボタンかどうか確認
-                if (e.target === nextButton || e.target === prevButton) {
-                    return; // ボタンがクリックされた場合は何もしない
-                }
-            }
-
-            // それ以外の場所がクリックされたらUI要素とナビゲーションバーを表示
-            showUIControls();
-            showNavBar();
-        });
-
-        // タッチイベント（モバイル対応）
-        document.addEventListener('touchstart', function(e) {
-            const submenuButton = document.getElementById('submenu-open-button');
-            const submenuPopup = document.getElementById('submenu-popup');
-            const touch = e.touches[0];
-            const target = document.elementFromPoint(touch.clientX, touch.clientY);
-
-            // サブメニュー関連をタップした場合はUI要素のタイマーをリセット
-            if (submenuButton.contains(target) || submenuPopup.contains(target)) {
-                clearTimeout(uiControlsTimeout);
-                uiControlsTimeout = setTimeout(() => {
-                    if (!isMouseOverUIControls) {
-                        hideUIControls();
-                    }
-                }, UI_CONTROLS_HIDE_DELAY);
-                return;
-            }
-
-            // 見開きモード時は左右のページ移動ボタンをタップした場合は表示しない
-            if (viewMode === 'normal') {
-                const nextButton = document.getElementById('next-button');
-                const prevButton = document.getElementById('prev-button');
-
-                // タップされた要素がページ移動ボタンかどうか確認
-                if (target === nextButton || target === prevButton) {
-                    return; // ボタンがタップされた場合は何もしない
-                }
-            }
-
-            // それ以外の場所がタップされたらUI要素とナビゲーションバーを表示
-            showUIControls();
-            showNavBar();
-        });
-
-        // UI要素にマウスが乗っている間は非表示にしない
-        const uiElements = [
-            document.getElementById('submenu-open-button'),
-            document.getElementById('submenu-popup'),
-            document.getElementById('autoplay-button-fixed'),
-            document.getElementById('mode-switch-container'),
-            document.getElementById('fullscreen-button-fixed')
-        ];
-
-        uiElements.forEach(element => {
-            if (element) {
-                element.addEventListener('mouseenter', function() {
-                    isMouseOverUIControls = true;
-                    clearTimeout(uiControlsTimeout);
-                });
-
-                element.addEventListener('mouseleave', function() {
-                    isMouseOverUIControls = false;
-                    // マウスが離れたら3秒後に非表示
-                    uiControlsTimeout = setTimeout(() => {
-                        hideUIControls();
-                    }, UI_CONTROLS_HIDE_DELAY);
-                });
-            }
-        });
-
         // ナビゲーションバーにマウスが乗っている間は非表示にしない
         navBar.addEventListener('mouseenter', function() {
             isMouseOverNavBar = true;
@@ -2260,25 +2108,7 @@
             }, NAV_BAR_HIDE_DELAY);
         });
 
-        // 全画面モードの変化を検知してアイコンを更新
-        document.addEventListener('fullscreenchange', function() {
-            updateFullscreenIcon();
-            if (document.fullscreenElement) {
-                console.log('全画面モードに入りました');
-            } else {
-                console.log('全画面モードから抜けました');
-            }
-        });
-
-        // Safari用
-        document.addEventListener('webkitfullscreenchange', function() {
-            updateFullscreenIcon();
-            if (document.webkitFullscreenElement) {
-                console.log('全画面モードに入りました (webkit)');
-            } else {
-                console.log('全画面モードから抜けました (webkit)');
-            }
-        });
+        // 全画面モードの変化を検知（C++側のinitializeUIEventListenersで処理）
 
         // キーボードショートカット
         document.addEventListener('keydown', function(e) {
@@ -2310,13 +2140,13 @@
 
         // ウィンドウリサイズ時に再描画 & モード自動切り替え
         let resizeTimer;
-        let previousOrientation = isLandscape(); // 前回の画面の向きを記憶
+        let previousOrientation = window.innerWidth > window.innerHeight; // 前回の画面の向きを記憶
         window.addEventListener('resize', function() {
             clearTimeout(resizeTimer);
             resizeTimer = setTimeout(function() {
                 console.log('Window resized, re-rendering...');
 
-                const currentOrientation = isLandscape();
+                const currentOrientation = window.innerWidth > window.innerHeight;
 
                 if (viewMode !== 'normal') {
                     // シームレスモード中で、画面の向きが変わった場合は自動的にモードを切り替え
@@ -2334,6 +2164,7 @@
                             if (seamlessDirection !== 'horizontal') {
                                 seamlessDirection = 'horizontal';
                                 viewMode = 'seamless-horizontal';
+                                window.viewMode = viewMode;
                                 document.getElementById('seamless-container').classList.add('active');
                                 document.getElementById('vertical-container').classList.remove('active');
                                 initSeamlessMode();
@@ -2345,6 +2176,7 @@
                             if (seamlessDirection !== 'vertical') {
                                 seamlessDirection = 'vertical';
                                 viewMode = 'seamless-vertical';
+                                window.viewMode = viewMode;
                                 document.getElementById('seamless-container').classList.remove('active');
                                 document.getElementById('vertical-container').classList.add('active');
                                 initVerticalMode();

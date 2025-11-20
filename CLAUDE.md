@@ -665,6 +665,7 @@ done
    - Flexboxの`align-items: center`を使用して縮小時の画像を中央配置
 
 ### エクスポート関数（C++）
+**コア機能**：
 - `initialize(book_id)` - 初期化
 - `nextPage()` - 次ページへ
 - `prevPage()` - 前ページへ
@@ -674,6 +675,18 @@ done
 - `renderSinglePage(pageNum, canvasId)` - 単一ページ描画
 - `loadPageToCache(pageNum)` - ページをキャッシュに読み込み
 - `setSinglePageMode(enabled)` - 1ページ/2ページモード切り替え
+
+**ユーティリティ関数**（2025-11-20追加）：
+- `isLandscape()` - 画面の向きを判定
+- `isMobileDevice()` - モバイルデバイスかどうかを判定
+
+**UI制御関数**（2025-11-20追加）：
+- `updateFullscreenIcon()` - 全画面アイコンを更新
+- `updateSubmenuVisibility(viewMode)` - サブメニューの表示/非表示を更新
+- `updateModeSwitchButtons(viewMode)` - モード切り替えボタンを更新
+- `updateDirectionButtons(direction)` - 読み方向ボタンを更新
+- `showUIControls()` - UI要素を表示
+- `hideUIControls()` - UI要素を非表示
 
 ## 連絡事項
 
@@ -693,6 +706,99 @@ done
 13. ✅ モバイルデバイス対応 → 完了
 14. ✅ UI要素の自動表示/非表示機能 → 完了
 15. ✅ モバイルブラウザでの画像品質改善 → 完了（devicePixelRatio対応、モアレ対策）
+16. ✅ JavaScriptコードのWASM化 → 完了（セキュリティ強化、約300行移動）
+17. ✅ Windowリサイズ時の動作問題 → 完了（通常モード・シームレスモードの両方）
+18. ✅ 自動再生ボタンの表示問題 → 完了（再表示時の問題を解決）
+
+### 本セッションで実装した機能（2025-11-20）
+
+#### 1. JavaScriptコードのWASM化（セキュリティ強化）
+**目的**: JavaScriptコードをできるだけユーザーの目に触れないようにする
+
+**main.cppに移動した関数（約300行）**：
+- **ユーティリティ関数**
+  - `isLandscape()` - 画面の向きを判定（main.cpp:572-576）
+  - `isMobileDevice()` - モバイルデバイスかどうかを判定（main.cpp:578-587）
+
+- **UI制御関数**
+  - `updateFullscreenIcon()` - 全画面アイコンを更新（main.cpp:589-601）
+  - `updateSubmenuVisibility()` - サブメニューの表示/非表示を更新（main.cpp:603-625）
+  - `updateModeSwitchButtons()` - モード切り替えボタンを更新（main.cpp:627-650）
+  - `updateDirectionButtons()` - 読み方向ボタンを更新（main.cpp:652-667）
+  - `showUIControls()` - UI要素を表示（main.cpp:671-714）
+  - `hideUIControls()` - UI要素を非表示（main.cpp:716-729）
+
+**index.htmlの変更**：
+- 上記の関数を削除し、`Module.ccall()` でC++側の関数を呼び出すように変更
+- イベントリスナー設定は複雑なため、最小限のコードに圧縮（約10行）
+- `isLandscape()`と`isMobileDevice()`の呼び出しを直接的な判定式に置き換え
+  - `isLandscape()` → `window.innerWidth > window.innerHeight`
+  - `isMobileDevice()` → インライン判定式
+
+**効果**：
+- 約300行のJavaScriptコードがWASMバイナリに移動
+- ユーザーがブラウザのDevToolsで見えるJavaScriptコードが大幅に削減
+- WASMファイルは難読化されているため、コードロジックの解読が困難に
+
+**ビルド結果**：
+```
+mukuviewer.js:  40KB（36KB → 40KB、+4KB）
+mukuviewer.wasm: 125KB（変更なし）
+```
+
+#### 2. Windowリサイズ時の動作問題を修正
+**問題**：
+- 通常モード：Windowをリサイズしても画像表示サイズが変わらない、1ページ/2ページ表示が切り替わらない
+- シームレスモード：Windowサイズにより縦スクロール/横スクロールを切り替える部分が動作しない
+
+**原因**：
+- `isLandscape()`をC++側に移動したことで、`Module.ccall()`を使った呼び出しが必要になり、タイミングの問題が発生
+- 初期化時やリサイズ時にModule.ccallがまだ利用できない状態でisLandscape()を呼び出していた
+
+**修正内容**：
+- リサイズイベントハンドラーで`isLandscape()`の代わりに直接 `window.innerWidth > window.innerHeight` を使用（index.html:2122, 2128）
+- 初期化時も同様に直接判定（index.html:766）
+- シームレスモード切り替え時も直接判定（index.html:1088）
+
+**効果**：
+- ✅ 通常モード：Windowリサイズ時に画像サイズが自動調整され、1ページ/2ページ表示が切り替わる
+- ✅ シームレスモード：Windowリサイズ時に縦読み/横読みが自動的に切り替わる
+
+#### 3. 自動再生ボタンの表示問題を修正
+**問題1**：シームレスモードに切り替えた際、自動再生ボタンが見当たらない
+**原因**：`visible`クラスのみ追加され、`show`クラスが追加されていなかったため、`opacity: 0`のまま表示されなかった
+
+**修正内容**：
+- `switchToSeamlessMode()`で自動再生ボタンに`visible`と`show`の両方のクラスを追加（index.html:1095-1099）
+- `switchToNormalMode()`で自動再生ボタンから両方のクラスを削除（index.html:1159-1161）
+- `updateSubmenuVisibility()`でサブメニューボタンにも`show`クラスを追加/削除（main.cpp:610-614）
+
+**問題2**：一定時間画面クリックがなく自動再生ボタンが一旦消えた後、再度画面クリックした際に他のボタンは表示されるが自動再生ボタンだけ表示されない
+
+**原因**：
+- `viewMode`変数が`let`で宣言されていたため、`window.viewMode`として参照できなかった
+- C++側の`showUIControls()`では`window.viewMode`を参照していたが、`undefined`になり常に`'normal'`と判定されていた
+- そのため、`if (viewMode !== 'normal')`の条件が常に`false`となり、自動再生ボタンが表示されなかった
+
+**修正内容**：
+- `viewMode`を`var`で宣言し、`window.viewMode`として管理（index.html:963-964）
+- viewMode変更時に`window.viewMode`も同時に更新（index.html:1091, 1147, 1205, 1215, 2167, 2179）
+- これにより、C++側の`showUIControls()`が正しく`window.viewMode`を参照できるようになった
+
+**効果**：
+- ✅ シームレスモードで自動再生ボタンが正しく表示される
+- ✅ UI要素が非表示になった後、再度画面クリックで自動再生ボタンも含めてすべてのボタンが再表示される
+
+#### 4. エクスポート関数の追加（C++）
+以下の関数を追加してJavaScript側から呼び出せるようにした：
+- `isLandscape()` - 画面の向きを判定
+- `isMobileDevice()` - モバイルデバイスかどうかを判定
+- `updateFullscreenIcon()` - 全画面アイコンを更新
+- `updateSubmenuVisibility(viewMode)` - サブメニューの表示/非表示を更新
+- `updateModeSwitchButtons(viewMode)` - モード切り替えボタンを更新
+- `updateDirectionButtons(direction)` - 読み方向ボタンを更新
+- `showUIControls()` - UI要素を表示
+- `hideUIControls()` - UI要素を非表示
 
 ### 次のステップ候補
 - ページ番号表示UIの追加
@@ -702,3 +808,9 @@ done
 - より多段階の倍率選択（0.25倍、0.75倍、1.5倍など）
 - デバッグログの削除（本番環境用）
 - ページ履歴の保存（LocalStorage利用）
+
+## 最終更新
+
+- **日付**: 2025-11-20
+- **最終ビルド**: mukuviewer.js (40KB), mukuviewer.wasm (125KB)
+- **作業状況**: JavaScriptコードのWASM化（セキュリティ強化）、Windowリサイズ対応修正、自動再生ボタン表示問題修正

@@ -566,6 +566,172 @@ extern "C" {
             viewer->setSinglePageMode(enabled);
         }
     }
+
+    // JavaScript関数のエクスポート（UI制御とユーティリティ関数）
+    EMSCRIPTEN_KEEPALIVE
+    bool isLandscape() {
+        return EM_ASM_INT({
+            return window.innerWidth > window.innerHeight ? 1 : 0;
+        });
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    bool isMobileDevice() {
+        return EM_ASM_INT({
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet/i;
+            const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            const isSmallScreen = window.innerWidth <= 1024;
+            return (mobileRegex.test(userAgent) || (isTouchDevice && isSmallScreen)) ? 1 : 0;
+        });
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    void updateFullscreenIcon() {
+        EM_ASM({
+            const icon = document.getElementById('fullscreen-icon');
+            if (icon) {
+                if (document.fullscreenElement || document.webkitFullscreenElement) {
+                    icon.src = 'public/images/fullscreen_cancel.png';
+                } else {
+                    icon.src = 'public/images/fullscreen.png';
+                }
+            }
+        });
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    void updateSubmenuVisibility(const char* viewMode) {
+        EM_ASM({
+            const submenuButton = document.getElementById('submenu-open-button');
+            const mode = UTF8ToString($0);
+
+            if (mode !== 'normal') {
+                submenuButton.classList.add('visible');
+                submenuButton.classList.add('show');
+            } else {
+                submenuButton.classList.remove('visible');
+                submenuButton.classList.remove('show');
+                // サブメニューを閉じる
+                const submenuPopup = document.getElementById('submenu-popup');
+                if (submenuPopup && submenuPopup.classList.contains('visible')) {
+                    submenuPopup.classList.remove('visible');
+                    if (window.submenuOpen) {
+                        window.submenuOpen = false;
+                    }
+                }
+            }
+        }, viewMode);
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    void updateModeSwitchButtons(const char* viewMode) {
+        EM_ASM({
+            const seamlessButton = document.getElementById('seamless-mode-button');
+            const normalButton = document.getElementById('normal-mode-button');
+            const seamlessIcon = document.getElementById('seamless-mode-icon');
+            const normalIcon = document.getElementById('normal-mode-icon');
+            const mode = UTF8ToString($0);
+
+            if (mode === 'normal') {
+                // 見開きモード時
+                seamlessButton.classList.remove('inactive');
+                seamlessIcon.src = 'public/images/button_seamless_off.png';
+
+                normalButton.classList.add('inactive');
+                normalIcon.src = 'public/images/button_mihiraki_on.png';
+            } else {
+                // シームレスモード時
+                seamlessButton.classList.add('inactive');
+                seamlessIcon.src = 'public/images/button_seamless_on.png';
+
+                normalButton.classList.remove('inactive');
+                normalIcon.src = 'public/images/button_mihiraki_off.png';
+            }
+        }, viewMode);
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    void updateDirectionButtons(const char* direction) {
+        EM_ASM({
+            const verticalButton = document.getElementById('submenu-vertical-button');
+            const horizontalButton = document.getElementById('submenu-horizontal-button');
+            const dir = UTF8ToString($0);
+
+            if (dir === 'vertical') {
+                if (verticalButton) verticalButton.classList.add('active');
+                if (horizontalButton) horizontalButton.classList.remove('active');
+            } else {
+                if (verticalButton) verticalButton.classList.remove('active');
+                if (horizontalButton) horizontalButton.classList.add('active');
+            }
+        }, direction);
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    void showUIControls() {
+        EM_ASM({
+            const submenuButton = document.getElementById('submenu-open-button');
+            const autoplayButton = document.getElementById('autoplay-button-fixed');
+            const modeSwitchContainer = document.getElementById('mode-switch-container');
+            const fullscreenButton = document.getElementById('fullscreen-button-fixed');
+
+            // viewModeを取得
+            const viewMode = window.viewMode || 'normal';
+
+            if (viewMode !== 'normal' && submenuButton.classList.contains('visible')) {
+                submenuButton.classList.add('show');
+            }
+
+            if (viewMode !== 'normal' && autoplayButton.classList.contains('visible')) {
+                autoplayButton.classList.add('show');
+            }
+
+            modeSwitchContainer.classList.add('show');
+
+            // モバイルデバイスでない場合のみ全画面ボタンを表示
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet/i;
+            const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            const isSmallScreen = window.innerWidth <= 1024;
+            const isMobile = mobileRegex.test(userAgent) || (isTouchDevice && isSmallScreen);
+
+            if (!isMobile) {
+                fullscreenButton.classList.add('show');
+            }
+
+            // タイマーをリセット
+            if (window.uiControlsTimeout) {
+                clearTimeout(window.uiControlsTimeout);
+            }
+
+            window.uiControlsTimeout = setTimeout(() => {
+                if (!window.isMouseOverUIControls) {
+                    Module.ccall('hideUIControls', null, [], []);
+                }
+            }, 3000);
+        });
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    void hideUIControls() {
+        EM_ASM({
+            if (!window.isMouseOverUIControls) {
+                const submenuButton = document.getElementById('submenu-open-button');
+                const autoplayButton = document.getElementById('autoplay-button-fixed');
+                const modeSwitchContainer = document.getElementById('mode-switch-container');
+                const fullscreenButton = document.getElementById('fullscreen-button-fixed');
+
+                submenuButton.classList.remove('show');
+                autoplayButton.classList.remove('show');
+                modeSwitchContainer.classList.remove('show');
+                fullscreenButton.classList.remove('show');
+            }
+        });
+    }
+
+    // Note: initializeUIEventListeners は index.html 側で実装
+    // EM_ASMの制限により、複雑なイベントリスナー設定はHTMLに残します
 }
 
 int main() {
