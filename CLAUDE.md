@@ -197,15 +197,22 @@ https://mvtest.ci-labo.net/images/[コミックID]/[ページ番号].jpg.enc
 
 ```
 /var/www/mvtest/
-├── index.html              # エントリーポイント
+├── index.html              # エントリーポイント (111行、2,226行から95%削減)
 ├── build.sh                # ビルドスクリプト
+├── minify.sh               # CSS/JS圧縮スクリプト（自動化ツール）
 ├── build/
-│   ├── mukuviewer.js       # WebAssemblyラッパー (36KB)
+│   ├── mukuviewer.js       # WebAssemblyラッパー (40KB)
 │   └── mukuviewer.wasm     # コンパイル済みバイナリ (125KB)
 ├── src/
 │   ├── main.cpp            # メインのC++ソースコード
 │   ├── cipher.cpp          # AES-128暗号化/復号化ライブラリ
 │   └── stb_image.h         # 画像デコードライブラリ
+├── css/
+│   ├── styles.css          # CSSソースファイル (16KB, 615行)
+│   └── styles.min.css      # CSS圧縮版 (7.5KB, 52%削減) - 本番環境で使用
+├── js/
+│   ├── main.js             # JavaScriptソースファイル (66KB, 1,498行)
+│   └── main.min.js         # JavaScript圧縮版 (25KB, 62%削減) - 本番環境で使用
 ├── images/
 │   └── 00000001/           # テスト用画像 (1.jpg.enc～209.jpg.enc、デモ版では20ページまで利用)
 ├── public/
@@ -709,6 +716,8 @@ done
 16. ✅ JavaScriptコードのWASM化 → 完了（セキュリティ強化、約300行移動）
 17. ✅ Windowリサイズ時の動作問題 → 完了（通常モード・シームレスモードの両方）
 18. ✅ 自動再生ボタンの表示問題 → 完了（再表示時の問題を解決）
+19. ✅ CSS/JavaScript外部ファイル化 → 完了（index.html 95%削減）
+20. ✅ 自動圧縮ツール導入 → 完了（minify.sh、60%ファイルサイズ削減）
 
 ### 本セッションで実装した機能（2025-11-20）
 
@@ -800,6 +809,76 @@ mukuviewer.wasm: 125KB（変更なし）
 - `showUIControls()` - UI要素を表示
 - `hideUIControls()` - UI要素を非表示
 
+#### 5. CSS/JavaScript外部ファイル化と圧縮（コード整理とパフォーマンス向上）
+
+**目的**：
+- index.htmlの肥大化を防ぎ、ソースコードの保守性を向上
+- CSS/JSの圧縮によるページ読み込み速度の改善
+- 繰り返し実行できる自動化ツールの導入
+
+**実装内容**：
+
+**1. 外部ファイルへの分離**
+- **css/styles.css**: index.htmlから全CSSを分離（615行、16KB）
+  - 全てのスタイル定義を抽出
+  - レスポンシブデザイン、アニメーション、ボタンスタイルなどを含む
+
+- **js/main.js**: index.htmlから全JavaScriptを分離（1,498行、66KB）
+  - ビューアロジック、イベントハンドラー、UI制御などを抽出
+  - Module初期化コード、モード切り替えロジック、スクロール制御を含む
+
+- **index.html**: エントリーポイント（111行、2,226行から95%削減）
+  - HTMLマークアップのみに集中
+  - 外部CSSファイルを参照: `<link rel="stylesheet" href="css/styles.min.css">`（index.html:7）
+  - 外部JSファイルを参照: `<script src="js/main.min.js"></script>`（index.html:107）
+
+**2. 自動圧縮ツールの導入（minify.sh）**
+```bash
+#!/bin/bash
+# terser（JavaScript圧縮）
+npx terser js/main.js -o js/main.min.js -c -m --comments false
+
+# clean-css-cli（CSS圧縮）
+npx cleancss -o css/styles.min.css css/styles.css
+```
+
+**機能**：
+- terser、clean-css-cliの自動インストール（未インストール時）
+- JavaScript圧縮（コメント削除、変数名短縮化、スペース除去）
+- CSS圧縮（不要なスペース・改行削除、最適化）
+- 圧縮前後のファイルサイズ比較表示
+- 削減率の自動計算
+
+**圧縮結果**：
+```
+JavaScript:
+  js/main.js     : 66KB
+  js/main.min.js : 25KB (62.2% reduction)
+
+CSS:
+  css/styles.css     : 16KB
+  css/styles.min.css : 7.5KB (52.1% reduction)
+
+Total:
+  Original : 82KB
+  Minified : 33KB
+  Saved    : 49KB (60.3% reduction)
+```
+
+**効果**：
+- ✅ index.htmlが2,226行から111行に削減（95%削減）
+- ✅ 読み込みファイルサイズが82KB → 33KBに削減（60%削減）
+- ✅ ページ読み込み速度が約50KB分向上
+- ✅ ソースコードの可読性と保守性が向上（開発時）
+- ✅ 本番環境では圧縮版を使用してパフォーマンス最適化
+- ✅ 今後の圧縮作業が `./minify.sh` 一発で実行可能
+
+**実行方法**：
+```bash
+cd /var/www/mvtest
+./minify.sh
+```
+
 ### 次のステップ候補
 - ページ番号表示UIの追加
 - 自動再生速度の調整機能
@@ -812,5 +891,12 @@ mukuviewer.wasm: 125KB（変更なし）
 ## 最終更新
 
 - **日付**: 2025-11-20
-- **最終ビルド**: mukuviewer.js (40KB), mukuviewer.wasm (125KB)
-- **作業状況**: JavaScriptコードのWASM化（セキュリティ強化）、Windowリサイズ対応修正、自動再生ボタン表示問題修正
+- **最終ビルド**:
+  - mukuviewer.js (40KB), mukuviewer.wasm (125KB)
+  - styles.min.css (7.5KB), main.min.js (25KB)
+- **作業状況**:
+  1. JavaScriptコードのWASM化（セキュリティ強化、約300行移動）
+  2. Windowリサイズ対応修正（通常モード・シームレスモード）
+  3. 自動再生ボタン表示問題修正
+  4. CSS/JavaScript外部ファイル化（index.html: 2,226行 → 111行、95%削減）
+  5. 自動圧縮ツール導入（minify.sh、60.3%ファイルサイズ削減）
