@@ -14,6 +14,17 @@
 
 int invCipher( uint8_t* data, int size );
 
+// JavaScript側の設定から画像ベースURLを取得
+EM_JS(const char*, getImageBaseUrl, (), {
+    var url = window.MUKUVIEWER_CONFIG && window.MUKUVIEWER_CONFIG.imageBaseUrl
+        ? window.MUKUVIEWER_CONFIG.imageBaseUrl
+        : "https://mvtest.ci-labo.net/images";
+    var lengthBytes = lengthBytesUTF8(url) + 1;
+    var stringOnWasmHeap = _malloc(lengthBytes);
+    stringToUTF8(url, stringOnWasmHeap, lengthBytes);
+    return stringOnWasmHeap;
+});
+
 // 画像データ構造
 struct ImageData {
     std::vector<unsigned char> data;
@@ -94,9 +105,11 @@ public:
             return;
         }
 
-        // 画像URLの構築
-        char url[256];
-        snprintf(url, sizeof(url), "https://mvtest.ci-labo.net/images/%s/%d.jpg.enc", bookId.c_str(), pageNum);
+        // 画像URLの構築（設定からベースURLを取得）
+        const char* baseUrl = getImageBaseUrl();
+        char url[512];
+        snprintf(url, sizeof(url), "%s/%s/%d.jpg.enc", baseUrl, bookId.c_str(), pageNum);
+        free((void*)baseUrl);  // getImageBaseUrl()がmallocしたメモリを解放
 
         printf("Fetching: %s\n", url);
 
