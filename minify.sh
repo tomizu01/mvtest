@@ -66,3 +66,22 @@ echo "  Original : $(numfmt --to=iec --suffix=B $TOTAL_ORIGINAL 2>/dev/null || e
 echo "  Minified : $(numfmt --to=iec --suffix=B $TOTAL_MINIFIED 2>/dev/null || echo "$((TOTAL_MINIFIED/1024))KB")"
 echo "  Saved    : $(numfmt --to=iec --suffix=B $TOTAL_SAVED 2>/dev/null || echo "$((TOTAL_SAVED/1024))KB") (${TOTAL_REDUCTION}% reduction)"
 echo ""
+
+# Cache busting - タイムスタンプパラメータを付与
+echo "Updating cache busting timestamps..."
+echo "-------------------------------------"
+
+TIMESTAMP=$(date +%Y%m%d%H%M%S)
+
+# index.htmlのCSS/JSファイル参照にタイムスタンプを付与
+# 既存のタイムスタンプパラメータを削除してから新しいものを付与
+sed -i "s|styles\.min\.css?v=[0-9]*|styles.min.css?v=${TIMESTAMP}|g" index.html
+sed -i "s|styles\.min\.css\"|styles.min.css?v=${TIMESTAMP}\"|g" index.html
+sed -i "s|main\.min\.js?v=[0-9]*|main.min.js?v=${TIMESTAMP}|g" index.html
+sed -i "s|main\.min\.js\"|main.min.js?v=${TIMESTAMP}\"|g" index.html
+sed -i "s|mukuviewer\.js?v=[0-9]*|mukuviewer.js?v=${TIMESTAMP}|g" index.html
+sed -i "s|mukuviewer\.js\"|mukuviewer.js?v=${TIMESTAMP}\"|g" index.html
+
+echo "  Timestamp: v=${TIMESTAMP}"
+echo "  Updated: css/styles.min.css, js/main.min.js, build/mukuviewer.js"
+echo ""
