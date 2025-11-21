@@ -718,8 +718,57 @@ done
 18. ✅ 自動再生ボタンの表示問題 → 完了（再表示時の問題を解決）
 19. ✅ CSS/JavaScript外部ファイル化 → 完了（index.html 95%削減）
 20. ✅ 自動圧縮ツール導入 → 完了（minify.sh、60%ファイルサイズ削減）
+21. ✅ 画像取得ドメインの設定外部化 → 完了（MUKUVIEWER_CONFIG）
+22. ✅ キャッシュバスティング機能 → 完了（minify.shでタイムスタンプ自動付与）
 
-### 本セッションで実装した機能（2025-11-20）
+### 本セッションで実装した機能（2025-11-21）
+
+#### 1. 画像取得ドメインの設定外部化（本番公開対応）
+**目的**: 本番サーバーでのドメイン変更を容易にする
+
+**実装内容**：
+- **index.html（8-13行目）**に設定変数を追加
+  ```html
+  <script>
+      window.MUKUVIEWER_CONFIG = {
+          imageBaseUrl: "https://mvtest.ci-labo.net/images"
+      };
+  </script>
+  ```
+- **main.cpp**に`getImageBaseUrl()`関数を追加（EM_JSマクロ使用）
+  - JavaScript側の設定を読み取ってC++側で使用
+  - 設定が未定義の場合はフォールバックURLを使用
+
+**使い方**：
+本番環境では`index.html`の1行を変更するだけでドメインを切り替え可能：
+```javascript
+imageBaseUrl: "https://本番ドメイン/images"
+```
+
+#### 2. キャッシュバスティング機能（iPhoneブラウザ対策）
+**目的**: iPhoneブラウザの強力なキャッシュによるファイル更新問題を解決
+
+**実装内容**：
+- **minify.sh**にタイムスタンプ自動付与機能を追加
+- 形式: `?v=YYYYMMDDHHmmss`（例: `?v=20251121070555`）
+- 対象ファイル:
+  - `css/styles.min.css`
+  - `js/main.min.js`
+  - `build/mukuviewer.js`
+
+**結果（index.html）**：
+```html
+<link rel="stylesheet" href="css/styles.min.css?v=20251121070555">
+<script src="js/main.min.js?v=20251121070555"></script>
+<script src="build/mukuviewer.js?v=20251121070555"></script>
+```
+
+**効果**：
+- `./minify.sh`を実行するたびに新しいタイムスタンプが自動付与
+- iPhoneブラウザでも確実に最新ファイルが読み込まれる
+- 手動でのバージョン管理が不要
+
+### 過去のセッションで実装した機能（2025-11-20）
 
 #### 1. JavaScriptコードのWASM化（セキュリティ強化）
 **目的**: JavaScriptコードをできるだけユーザーの目に触れないようにする
@@ -890,13 +939,10 @@ cd /var/www/mvtest
 
 ## 最終更新
 
-- **日付**: 2025-11-20
+- **日付**: 2025-11-21
 - **最終ビルド**:
-  - mukuviewer.js (40KB), mukuviewer.wasm (125KB)
+  - mukuviewer.js (41KB), mukuviewer.wasm (125KB)
   - styles.min.css (7.5KB), main.min.js (25KB)
 - **作業状況**:
-  1. JavaScriptコードのWASM化（セキュリティ強化、約300行移動）
-  2. Windowリサイズ対応修正（通常モード・シームレスモード）
-  3. 自動再生ボタン表示問題修正
-  4. CSS/JavaScript外部ファイル化（index.html: 2,226行 → 111行、95%削減）
-  5. 自動圧縮ツール導入（minify.sh、60.3%ファイルサイズ削減）
+  1. 画像取得ドメインの設定外部化（MUKUVIEWER_CONFIG）
+  2. キャッシュバスティング機能（minify.shでタイムスタンプ自動付与）
