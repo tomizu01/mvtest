@@ -636,12 +636,14 @@
             });
 
             // タッチイベント（モバイル対応）
+            // passive: false を指定してpreventDefaultを有効にする（iOS慣性スクロール対策）
             container.addEventListener('touchstart', (e) => {
                 isDragging = true;
                 startX = e.touches[0].pageX - container.offsetLeft;
                 startY = e.touches[0].pageY - container.offsetTop;
                 scrollLeft = container.scrollLeft;
                 scrollTop = container.scrollTop;
+                container.style.scrollBehavior = 'auto'; // ドラッグ中はsmoothを無効化
 
                 // 自動再生中の場合は一時停止
                 if (autoplayEnabled) {
@@ -651,10 +653,11 @@
                         autoplayInterval = null;
                     }
                 }
-            });
+            }, { passive: false });
 
             container.addEventListener('touchend', () => {
                 isDragging = false;
+                container.style.scrollBehavior = 'smooth'; // smoothに戻す
 
                 // ドラッグで一時停止していた場合は再開
                 if (autoplayPausedByDrag && autoplayEnabled) {
@@ -665,6 +668,9 @@
 
             container.addEventListener('touchmove', (e) => {
                 if (!isDragging) return;
+                // ブラウザのネイティブスクロール（慣性スクロール）を無効化
+                e.preventDefault();
+
                 const x = e.touches[0].pageX - container.offsetLeft;
                 const y = e.touches[0].pageY - container.offsetTop;
                 const walkX = (x - startX) * 2;
@@ -677,7 +683,7 @@
                 if (zoomLevel !== 1) {
                     container.scrollTop = scrollTop - walkY;
                 }
-            });
+            }, { passive: false });
 
             // カーソルスタイルを設定
             container.style.cursor = 'grab';
@@ -1041,6 +1047,7 @@
             });
 
             // タッチイベント（モバイル対応）
+            // passive: false を指定してpreventDefaultを有効にする（iOS慣性スクロール対策）
             container.addEventListener('touchstart', (e) => {
                 isDragging = true;
                 startX = e.touches[0].pageX - container.offsetLeft;
@@ -1057,7 +1064,7 @@
                         autoplayInterval = null;
                     }
                 }
-            });
+            }, { passive: false });
 
             container.addEventListener('touchend', () => {
                 isDragging = false;
@@ -1072,6 +1079,9 @@
 
             container.addEventListener('touchmove', (e) => {
                 if (!isDragging) return;
+                // ブラウザのネイティブスクロール（慣性スクロール）を無効化
+                e.preventDefault();
+
                 const x = e.touches[0].pageX - container.offsetLeft;
                 const y = e.touches[0].pageY - container.offsetTop;
                 const walkX = (x - startX) * 2;
@@ -1085,7 +1095,7 @@
                     const newScrollLeft = scrollLeft - walkX;
                     container.scrollLeft = newScrollLeft;
                 }
-            });
+            }, { passive: false });
 
             // カーソルスタイルを設定
             container.style.cursor = 'grab';

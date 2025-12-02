@@ -748,6 +748,7 @@ done
 21. ✅ 画像取得ドメインの設定外部化 → 完了（MUKUVIEWER_CONFIG）
 22. ✅ キャッシュバスティング機能 → 完了（minify.shでタイムスタンプ自動付与）
 23. ✅ iOS Safariでの上部余白問題 → 完了（100dvh + visualViewport API対応）
+24. ✅ iOS Safariでの慣性スクロール問題 → 完了（touch-action: none）
 
 ### 本セッションで実装した機能（2025-12-02）
 
@@ -770,6 +771,27 @@ done
 - `dvh`（動的ビューポート高さ）はiOS Safari 15.4以降でサポート
 - `visualViewport` APIはモバイルブラウザで正確なビューポートサイズを取得可能
 - 古いブラウザ向けに`100vh`と`document.documentElement.clientHeight`をフォールバックとして維持
+
+#### 2. iOS Safari 慣性スクロール問題の修正
+**問題**: シームレスモードの横読み（横スクロール）で、少しスワイプしただけで意図した以上にスクロールしてしまう（縦読みでは問題なし）
+
+**原因**:
+- iOSのネイティブ慣性スクロール（モメンタムスクロール）がJavaScriptのスクロール制御と同時に発生
+- `touchmove`で`e.preventDefault()`を呼んでいたが、それだけでは不十分
+
+**修正内容**:
+1. **css/styles.css**: `touch-action: none`を追加
+   - `#seamless-container`と`#vertical-container`の両方に設定
+   - ブラウザのデフォルトのタッチ操作（パン、ズーム、慣性スクロール）を完全に無効化
+2. **js/main.js**: タッチイベントの改善
+   - `touchstart`と`touchmove`に`{ passive: false }`オプションを追加
+   - `touchmove`内で`e.preventDefault()`を呼び出し
+   - 横スクロールの`touchstart`で`scroll-behavior: auto`を設定（漏れていた）
+
+**技術的ポイント**:
+- `touch-action: none`はブラウザに「このエリアのタッチ操作は全てJavaScriptで処理する」と伝える
+- `passive: false`を指定しないと`preventDefault()`が無視される場合がある
+- `-webkit-overflow-scrolling: touch`の削除だけでは不十分（iOSはデフォルトで慣性スクロールが有効）
 
 ### 過去のセッションで実装した機能（2025-11-21）
 
@@ -995,4 +1017,4 @@ cd /var/www/mvtest
   - styles.min.css (7.6KB), main.min.js (26KB)
 - **作業状況**:
   1. iOS Safari 100vh問題の修正（上部余白問題を解決）
-  2. `100dvh` + `visualViewport` API対応
+  2. iOS Safari 慣性スクロール問題の修正（touch-action: none）

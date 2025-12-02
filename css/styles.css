@@ -126,7 +126,8 @@
             overflow-x: auto;
             overflow-y: hidden;
             scroll-behavior: smooth;
-            -webkit-overflow-scrolling: touch;
+            /* iOS Safari対応：タッチ操作をJavaScriptで完全に制御 */
+            touch-action: none;
         }
 
         #seamless-container.active {
@@ -169,7 +170,8 @@
             overflow-x: hidden;
             overflow-y: auto;
             scroll-behavior: smooth;
-            -webkit-overflow-scrolling: touch;
+            /* iOS Safari対応：タッチ操作をJavaScriptで完全に制御 */
+            touch-action: none;
         }
 
         #vertical-container.active {
