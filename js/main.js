@@ -1,5 +1,15 @@
         console.log('Starting mukuviewer...');
 
+        // iOS Safari対応：正確なビューポート高さを取得するヘルパー関数
+        function getViewportHeight() {
+            // visualViewport APIが利用可能な場合はそれを使用（iOS Safari対応）
+            if (window.visualViewport) {
+                return window.visualViewport.height;
+            }
+            // フォールバック：document.documentElement.clientHeightを使用
+            return document.documentElement.clientHeight;
+        }
+
         // URLからbook_idを取得
         const urlParams = new URLSearchParams(window.location.search);
         const bookId = urlParams.get('book_id') || '00000001';
@@ -40,7 +50,7 @@
                         Module.ccall('initialize', null, ['string'], [bookId]);
 
                         // 画面の向きに応じて1ページモード/2ページモードを設定
-                        const landscape = window.innerWidth > window.innerHeight;
+                        const landscape = window.innerWidth > getViewportHeight();
                         const singlePage = !landscape; // 縦長の場合は1ページモード
                         Module.ccall('setSinglePageMode', null, ['boolean'], [singlePage]);
                         console.log(`初期表示モード: ${landscape ? '2ページ（横長）' : '1ページ（縦長）'}`);
@@ -176,7 +186,7 @@
             } else {
                 // 横読みモード：画面高さを基準にサイズを計算（論理サイズ）
                 const imageAspect = imgWidth / imgHeight;
-                canvasHeight = window.innerHeight * scale;
+                canvasHeight = getViewportHeight() * scale;
                 optimalWidth = Math.floor(canvasHeight * imageAspect);
             }
 
@@ -362,7 +372,7 @@
             }, UI_CONTROLS_HIDE_DELAY);
 
             // シームレスモードに切り替え（画面サイズに応じて初期モードを決定）
-            const landscape = window.innerWidth > window.innerHeight;
+            const landscape = window.innerWidth > getViewportHeight();
             seamlessDirection = landscape ? 'horizontal' : 'vertical';
             viewMode = landscape ? 'seamless-horizontal' : 'seamless-vertical';
             window.viewMode = viewMode;
@@ -693,7 +703,7 @@
             // 一般的なマンガのアスペクト比（2:3）で初期サイズを設定（論理サイズ）
             // 表示倍率を適用
             const scale = zoomLevel;
-            const canvasHeight = window.innerHeight * scale;
+            const canvasHeight = getViewportHeight() * scale;
             const canvasWidth = Math.floor(canvasHeight * (2 / 3));
 
             // 描画バッファサイズは物理ピクセル（高DPI対応）
@@ -1232,7 +1242,7 @@
                 if (canvas) {
                     // Canvasのサイズを再計算（論理サイズ）
                     const scale = zoomLevel;
-                    const canvasHeight = window.innerHeight * scale;
+                    const canvasHeight = getViewportHeight() * scale;
                     const canvasWidth = Math.floor(canvasHeight * (2 / 3));
 
                     // 描画バッファサイズは物理ピクセル（高DPI対応）
@@ -1362,7 +1372,7 @@
 
         // マウスムーブで画面下部に入ったら表示
         document.addEventListener('mousemove', function(e) {
-            const windowHeight = window.innerHeight;
+            const windowHeight = getViewportHeight();
             const mouseY = e.clientY;
 
             // 画面下部のゾーンに入ったら表示
@@ -1417,13 +1427,13 @@
 
         // ウィンドウリサイズ時に再描画 & モード自動切り替え
         let resizeTimer;
-        let previousOrientation = window.innerWidth > window.innerHeight; // 前回の画面の向きを記憶
+        let previousOrientation = window.innerWidth > getViewportHeight(); // 前回の画面の向きを記憶
         window.addEventListener('resize', function() {
             clearTimeout(resizeTimer);
             resizeTimer = setTimeout(function() {
                 console.log('Window resized, re-rendering...');
 
-                const currentOrientation = window.innerWidth > window.innerHeight;
+                const currentOrientation = window.innerWidth > getViewportHeight();
 
                 if (viewMode !== 'normal') {
                     // シームレスモード中で、画面の向きが変わった場合は自動的にモードを切り替え

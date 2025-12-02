@@ -10,6 +10,7 @@
             position: relative;
             width: 100vw;
             height: 100vh;
+            height: 100dvh; /* iOS Safari対応：動的ビューポート高さ */
             display: flex;
             justify-content: center;
             align-items: center;
@@ -121,6 +122,7 @@
             position: relative;
             width: 100vw;
             height: 100vh;
+            height: 100dvh; /* iOS Safari対応：動的ビューポート高さ */
             overflow-x: auto;
             overflow-y: hidden;
             scroll-behavior: smooth;
@@ -145,6 +147,7 @@
 
         .page-canvas {
             height: 100vh;
+            height: 100dvh; /* iOS Safari対応：動的ビューポート高さ */
             flex-shrink: 0;
             background-color: #111;
             user-select: none;
@@ -162,6 +165,7 @@
             position: relative;
             width: 100vw;
             height: 100vh;
+            height: 100dvh; /* iOS Safari対応：動的ビューポート高さ */
             overflow-x: hidden;
             overflow-y: auto;
             scroll-behavior: smooth;
@@ -216,6 +220,7 @@
             left: 0;
             width: 100vw;
             height: 100vh;
+            height: 100dvh; /* iOS Safari対応：動的ビューポート高さ */
             background-color: #fff;
             display: flex;
             justify-content: center;

@@ -393,6 +393,33 @@ cd /var/www/mvtest
 3. **CSSのimage-rendering設定**
    - `image-rendering: auto; image-rendering: smooth;`を全Canvas要素に適用
 
+### 13. iOS Safariで画像上部に余白が発生（2025-12-02）
+**問題**: iOSブラウザで通常モード（見開き表示）の初期表示時に、画像の上に余白が発生
+**原因**:
+- iOS Safariでは`100vh`がアドレスバーを含んだ高さになる（既知の問題）
+- 実際のビューポートより大きい値が返されるため、画像の配置がずれる
+- AndroidやPCでは発生しない（iOS Safari特有の問題）
+**解決**:
+1. **viewportメタタグに`viewport-fit=cover`を追加**（index.html）
+   ```html
+   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+   ```
+2. **CSSで`100dvh`（動的ビューポート高さ）を使用**（styles.css）
+   - `height: 100vh`の直後に`height: 100dvh`を追加（フォールバック付き）
+   - 対象要素：`#container`, `#seamless-container`, `#vertical-container`, `.page-canvas`, `#splash-screen`
+   - `dvh`はiOS Safari 15.4以降でサポート、アドレスバーの表示/非表示に応じて自動調整
+3. **JavaScriptで`visualViewport` APIを使用**（main.js）
+   ```javascript
+   function getViewportHeight() {
+       if (window.visualViewport) {
+           return window.visualViewport.height;
+       }
+       return document.documentElement.clientHeight;
+   }
+   ```
+   - `window.innerHeight`の代わりに`getViewportHeight()`を使用
+   - iOS Safariで正確なビューポート高さを取得可能
+
 ## パフォーマンス
 
 ### メモリ使用量
@@ -720,8 +747,31 @@ done
 20. ✅ 自動圧縮ツール導入 → 完了（minify.sh、60%ファイルサイズ削減）
 21. ✅ 画像取得ドメインの設定外部化 → 完了（MUKUVIEWER_CONFIG）
 22. ✅ キャッシュバスティング機能 → 完了（minify.shでタイムスタンプ自動付与）
+23. ✅ iOS Safariでの上部余白問題 → 完了（100dvh + visualViewport API対応）
 
-### 本セッションで実装した機能（2025-11-21）
+### 本セッションで実装した機能（2025-12-02）
+
+#### 1. iOS Safari 100vh問題の修正
+**問題**: iOSブラウザで通常モード（見開き表示）の初期表示時に、画像の上に余白が発生
+
+**原因**:
+- iOS Safariでは`100vh`がアドレスバーを含んだ高さになる（既知の問題）
+- 実際のビューポートより大きい値が返されるため、画像の配置がずれる
+
+**修正内容**:
+1. **index.html**: viewportメタタグに`viewport-fit=cover`を追加
+2. **css/styles.css**: 5つの要素に`height: 100dvh`を追加（フォールバック付き）
+   - `#container`, `#seamless-container`, `#vertical-container`, `.page-canvas`, `#splash-screen`
+3. **js/main.js**: `getViewportHeight()`ヘルパー関数を追加
+   - `visualViewport` APIを優先使用
+   - `window.innerHeight`の使用箇所を置き換え
+
+**技術的ポイント**:
+- `dvh`（動的ビューポート高さ）はiOS Safari 15.4以降でサポート
+- `visualViewport` APIはモバイルブラウザで正確なビューポートサイズを取得可能
+- 古いブラウザ向けに`100vh`と`document.documentElement.clientHeight`をフォールバックとして維持
+
+### 過去のセッションで実装した機能（2025-11-21）
 
 #### 1. 画像取得ドメインの設定外部化（本番公開対応）
 **目的**: 本番サーバーでのドメイン変更を容易にする
@@ -939,10 +989,10 @@ cd /var/www/mvtest
 
 ## 最終更新
 
-- **日付**: 2025-11-21
+- **日付**: 2025-12-02
 - **最終ビルド**:
   - mukuviewer.js (41KB), mukuviewer.wasm (125KB)
-  - styles.min.css (7.5KB), main.min.js (25KB)
+  - styles.min.css (7.6KB), main.min.js (26KB)
 - **作業状況**:
-  1. 画像取得ドメインの設定外部化（MUKUVIEWER_CONFIG）
-  2. キャッシュバスティング機能（minify.shでタイムスタンプ自動付与）
+  1. iOS Safari 100vh問題の修正（上部余白問題を解決）
+  2. `100dvh` + `visualViewport` API対応
