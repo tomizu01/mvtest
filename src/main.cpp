@@ -56,7 +56,7 @@ private:
     bool singlePageMode;  // true: 1ページずつ表示, false: 2ページ表示
 
 public:
-    ComicViewer() : bookId("00000001"), currentPage(1), maxPages(20),
+    ComicViewer() : bookId("00000001"), currentPage(1), maxPages(19),
                     canvasTarget("#viewer-canvas"), singlePageMode(false) {}
 
     void initialize(const std::string& book_id) {
@@ -78,9 +78,18 @@ public:
         return singlePageMode;
     }
 
+    // 現在のページが表紙（1ページ目で単独表示）かどうか
+    bool isCoverPage() const {
+        return !singlePageMode && currentPage == 1;
+    }
+
     void loadCurrentPages() {
         if (singlePageMode) {
             printf("Loading page %d\n", currentPage);
+            loadPageToCache(currentPage);
+        } else if (isCoverPage()) {
+            // 表紙（1ページ目）は単独で読み込む
+            printf("Loading cover page %d\n", currentPage);
             loadPageToCache(currentPage);
         } else {
             printf("Loading pages %d and %d\n", currentPage, currentPage + 1);
@@ -259,8 +268,8 @@ public:
         bool page0Ready = (pageCache.find(currentPage) != pageCache.end() &&
                           pageCache[currentPage].loaded);
 
-        if (singlePageMode) {
-            // 1ページモード：現在のページが読み込まれていれば描画
+        if (singlePageMode || isCoverPage()) {
+            // 1ページモードまたは表紙：現在のページが読み込まれていれば描画
             if (page0Ready) {
                 renderPages();
             }
@@ -275,7 +284,9 @@ public:
     }
 
     void renderPages() {
-        if (singlePageMode) {
+        bool coverPage = isCoverPage();
+
+        if (singlePageMode || coverPage) {
             printf("Rendering page %d...\n", currentPage);
         } else {
             printf("Rendering pages %d and %d...\n", currentPage, currentPage + 1);
@@ -290,7 +301,7 @@ public:
                            pageCache[currentPage].loaded);
         bool page1Exists = false;
 
-        if (!singlePageMode) {
+        if (!singlePageMode && !coverPage) {
             page1Exists = (pageCache.find(currentPage + 1) != pageCache.end() &&
                           pageCache[currentPage + 1].loaded);
         }
@@ -303,7 +314,7 @@ public:
             totalImageWidth += pageCache[currentPage].width;
             maxImageHeight = pageCache[currentPage].height;
         }
-        if (!singlePageMode && page1Exists) {
+        if (!singlePageMode && !coverPage && page1Exists) {
             totalImageWidth += pageCache[currentPage + 1].width;
             if (pageCache[currentPage + 1].height > maxImageHeight) {
                 maxImageHeight = pageCache[currentPage + 1].height;
@@ -352,8 +363,8 @@ public:
         // 各ページの幅を計算（比率を保持）
         int page0Width = 0, page1Width = 0;
 
-        if (singlePageMode) {
-            // 1ページモード：1ページのみ表示
+        if (singlePageMode || coverPage) {
+            // 1ページモードまたは表紙：1ページのみ表示
             if (page0Exists) {
                 page0Width = displayWidth;
             }
@@ -372,8 +383,8 @@ public:
             }
         }
 
-        if (singlePageMode) {
-            // 1ページモード：中央に1ページのみ表示
+        if (singlePageMode || coverPage) {
+            // 1ページモードまたは表紙：中央に1ページのみ表示
             if (page0Exists) {
                 drawImageToCanvas(currentPage, offsetX, offsetY, page0Width, displayHeight);
             }
@@ -436,7 +447,17 @@ public:
     }
 
     void nextPage() {
-        int increment = singlePageMode ? 1 : 2;
+        int increment;
+        if (singlePageMode) {
+            increment = 1;
+        } else if (isCoverPage()) {
+            // 表紙（1ページ目）からは1ページだけ進む（→2ページ目へ）
+            increment = 1;
+        } else {
+            // 見開きモードでは2ページずつ進む
+            increment = 2;
+        }
+
         if (currentPage + increment <= maxPages) {
             currentPage += increment;
             printf("Next page: %d\n", currentPage);
@@ -450,17 +471,29 @@ public:
     }
 
     void prevPage() {
-        int decrement = singlePageMode ? 1 : 2;
-        if (currentPage > 1) {
-            currentPage = (currentPage - decrement < 1) ? 1 : currentPage - decrement;
-            printf("Previous page: %d\n", currentPage);
-
-            // キャッシュから即座に描画
-            checkAndRender();
-
-            // 先読みを開始（前方向にも読み込む）
-            preloadPages();
+        if (currentPage <= 1) {
+            return;  // すでに1ページ目
         }
+
+        int decrement;
+        if (singlePageMode) {
+            decrement = 1;
+        } else if (currentPage == 2) {
+            // 2ページ目から表紙に戻る場合は1ページだけ戻る
+            decrement = 1;
+        } else {
+            // 見開きモードでは2ページずつ戻る
+            decrement = 2;
+        }
+
+        currentPage = (currentPage - decrement < 1) ? 1 : currentPage - decrement;
+        printf("Previous page: %d\n", currentPage);
+
+        // キャッシュから即座に描画
+        checkAndRender();
+
+        // 先読みを開始（前方向にも読み込む）
+        preloadPages();
     }
 
     void refresh() {

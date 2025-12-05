@@ -252,7 +252,7 @@
         let seamlessDirection = 'horizontal'; // 'horizontal' or 'vertical'
         let seamlessPages = [];
         let verticalPages = [];
-        const MAX_PAGES = 20; // デモ版の最大ページ数
+        const MAX_PAGES = 19; // デモ版の最大ページ数
         const SEAMLESS_PRELOAD_RANGE = 5; // 現在位置から前後5ページを読み込む
 
         // 自動再生の管理
@@ -518,8 +518,8 @@
             scrollContainer.innerHTML = ''; // クリア
             seamlessPages = [];
 
-            // 右開きのため、ページを逆順で配置（20, 19, 18, ... 2, 1）
-            for (let i = 20; i >= 1 && i <= MAX_PAGES; i--) {
+            // 右開きのため、ページを逆順で配置（19, 18, 17, ... 2, 1）
+            for (let i = MAX_PAGES; i >= 1; i--) {
                 const canvas = createPageCanvas(i);
                 scrollContainer.appendChild(canvas);
             }
@@ -545,8 +545,8 @@
             scrollContainer.innerHTML = ''; // クリア
             verticalPages = [];
 
-            // 縦に配置（1, 2, 3, ... 20）
-            for (let i = 1; i <= 20 && i <= MAX_PAGES; i++) {
+            // 縦に配置（1, 2, 3, ... 19）
+            for (let i = 1; i <= MAX_PAGES; i++) {
                 const canvas = createVerticalPageCanvas(i);
                 scrollContainer.appendChild(canvas);
             }
