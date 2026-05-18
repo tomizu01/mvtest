@@ -18,7 +18,7 @@ int invCipher( uint8_t* data, int size );
 EM_JS(const char*, getImageBaseUrl, (), {
     var url = window.MUKUVIEWER_CONFIG && window.MUKUVIEWER_CONFIG.imageBaseUrl
         ? window.MUKUVIEWER_CONFIG.imageBaseUrl
-        : "https://mvtest.ci-labo.net/images";
+        : "https://jlc-sample1.mukuviewer.com/images";
     var lengthBytes = lengthBytesUTF8(url) + 1;
     var stringOnWasmHeap = _malloc(lengthBytes);
     stringToUTF8(url, stringOnWasmHeap, lengthBytes);
@@ -56,7 +56,7 @@ private:
     bool singlePageMode;  // true: 1ページずつ表示, false: 2ページ表示
 
 public:
-    ComicViewer() : bookId("00000001"), currentPage(1), maxPages(19),
+    ComicViewer() : bookId("00000001"), currentPage(1), maxPages(33),
                     canvasTarget("#viewer-canvas"), singlePageMode(false) {}
 
     void initialize(const std::string& book_id) {
